@@ -109,6 +109,10 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
 .insight-box b{color:var(--amber);}
 .insight-box.blue{background:#eff6ff;border-color:#bfdbfe;}
 .insight-box.blue b{color:var(--navy);}
+.insight-box.red{background:var(--rbg);border-color:#fecaca;}
+.insight-box.red b{color:var(--red);}
+.insight-box ul{margin:6px 0 0 18px;padding:0;}
+.insight-box li{font-size:12px;color:#1e293b;line-height:1.6;margin-bottom:3px;}
 .insight-box p{font-size:12px;color:#1e293b;line-height:1.5;margin-top:4px;}
 
 .chart-wrap{position:relative;height:320px;}
@@ -195,6 +199,7 @@ body.export-mode .main{margin-left:0;}
         <div class="sec-note" id="prodNote">rata-rata periode terpilih vs periode sebelumnya</div>
       </div>
       <div class="route-grid" id="routeGrid"></div>
+      <div class="insight-box" id="prodInsight" style="margin-top:16px;"></div>
     </div>
 
     <div class="section" id="sec-ins">
@@ -234,24 +239,38 @@ body.export-mode .main{margin-left:0;}
     <div class="section" id="sec-fleet">
       <div class="sec-head">
         <div class="sec-title">Support Delivery LK — Internal Fleet</div>
-        <div class="sec-note">Trip &amp; CBM armada eksternal pendukung, filter tanggal harian</div>
+        <div class="sec-note">Trip &amp; CBM armada eksternal pendukung, dibanding periode sebelumnya</div>
       </div>
-      <div class="kpi-row" id="fleetKpiRow" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;"></div>
-      <div class="grid2">
-        <div class="panel">
-          <div class="ph"><h3>Trend Trip Harian per Site</h3></div>
-          <div class="pb"><div class="chart-wrap tall"><canvas id="fleetChart"></canvas></div></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <div class="kpi" style="background:var(--navy);border-color:var(--navy);">
+          <div class="lbl" style="color:var(--ice);">Total Trip Eksternal — Periode Terpilih</div>
+          <div class="val" style="color:#fff;" id="fleetKpiTrip">0</div>
+          <div class="sub" id="fleetKpiTripDelta" style="color:var(--ice);"></div>
         </div>
-        <div class="panel">
-          <div class="ph"><h3>Ringkasan per Site</h3></div>
-          <div class="pb" style="padding:0;">
-            <table class="dt" id="fleetTable">
-              <thead><tr><th>Site / BU</th><th>Trip</th><th>CBM</th><th>CBM/Trip</th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
+        <div class="kpi">
+          <div class="lbl">Total CBM — Periode Terpilih</div>
+          <div class="val" id="fleetKpiCbm">0</div>
+          <div class="sub" id="fleetKpiCbmSub">—</div>
         </div>
       </div>
+
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="ph"><h3>Ringkasan per Site / BU</h3><span class="tag" id="fleetTag">periode</span></div>
+        <div class="pb" style="padding:0;">
+          <table class="dt" id="fleetTable">
+            <thead><tr><th>Site / BU</th><th>Trip</th><th>CBM</th><th>Trip Periode Lalu</th><th>Δ Trip</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel" id="costPanel" style="margin-bottom:16px;">
+        <div class="ph"><h3>Cost Internal vs Eksternal — Bulan Penuh</h3><span class="tag" id="costTag">—</span></div>
+        <div class="pb" id="costBody"></div>
+      </div>
+
+      <div class="insight-box" id="fleetInsight"></div>
     </div>
 
   </div>
