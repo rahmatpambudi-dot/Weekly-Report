@@ -134,6 +134,7 @@ function renderProdInsight(cur, prev){
   if(sitesWithData.length === 0){
     box.className = 'insight-box';
     box.innerHTML = '<b>Insight:</b><p>Tidak ada data produktivitas pada periode ini.</p>';
+    renderNotesGrid(cur, new Set());
     return;
   }
 
@@ -172,7 +173,80 @@ function renderProdInsight(cur, prev){
   items += `<li>✅ <b>${SITE_LABEL_PROD[bestOlf]}</b> tetap jalur dengan OLF tertinggi (${cur[bestOlf].olf.toFixed(1)}%).</li>`;
 
   box.innerHTML = `<b>${hasRedFlag ? '⚠️ Perlu Perhatian:' : 'Insight:'}</b><ul>${items}</ul>`;
+
+  const flaggedSet = new Set([worstOlf, ...declining.map(d=>d.site), ...doDeclining.map(d=>d.site)]);
+  renderNotesGrid(cur, flaggedSet);
 }
+
+// ===== Manual notes / action plan (persisted in localStorage, per browser) =====
+const NOTES_KEY_PREFIX = 'ndc_notes_v1_';
+function loadNote(site, field){
+  try{ return localStorage.getItem(NOTES_KEY_PREFIX + site + '_' + field) || ''; }
+  catch(e){ return ''; }
+}
+function saveNote(site, field, val){
+  try{ localStorage.setItem(NOTES_KEY_PREFIX + site + '_' + field, val); }
+  catch(e){ /* storage unavailable (private mode etc) */ }
+}
+
+function renderNotesGrid(cur, flaggedSet){
+  const grid = document.getElementById('notesGrid');
+  grid.innerHTML = '';
+  ROUTE_ORDER.forEach(site => {
+    const label = SITE_LABEL_PROD[site];
+    const isFlagged = flaggedSet.has(site);
+    const olfTxt = cur[site] ? cur[site].olf.toFixed(1)+'%' : '—';
+    const issueVal = loadNote(site, 'issue');
+    const planVal = loadNote(site, 'plan');
+
+    const card = document.createElement('div');
+    card.className = 'note-card';
+    card.innerHTML = `
+      <div class="nc-head">
+        <div class="nc-title">${label} <span style="color:var(--t3);font-weight:600;">· OLF ${olfTxt}</span></div>
+        <span class="nc-flag ${isFlagged?'red':'ok'}">${isFlagged?'⚠ perlu perhatian':'aman'}</span>
+      </div>
+      <label>Issue</label>
+      <textarea data-site="${site}" data-field="issue" placeholder="Tulis kendala/isu di jalur ini...">${issueVal}</textarea>
+      <label>Action Plan</label>
+      <textarea data-site="${site}" data-field="plan" placeholder="Tulis rencana tindak lanjutnya...">${planVal}</textarea>
+      <div class="nc-saved">✓ tersimpan</div>
+    `;
+    grid.appendChild(card);
+  });
+
+  grid.querySelectorAll('textarea').forEach(ta => {
+    let debounce;
+    ta.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        saveNote(ta.dataset.site, ta.dataset.field, ta.value);
+        const savedTag = ta.closest('.note-card').querySelector('.nc-saved');
+        savedTag.classList.add('show');
+        setTimeout(()=>savedTag.classList.remove('show'), 1500);
+      }, 400);
+    });
+  });
+}
+
+document.getElementById('copyNotesBtn').addEventListener('click', () => {
+  let text = 'CATATAN & ACTION PLAN — PRODUCTIVITY PER JALUR\n\n';
+  ROUTE_ORDER.forEach(site => {
+    const issue = loadNote(site,'issue');
+    const plan = loadNote(site,'plan');
+    if(!issue && !plan) return;
+    text += `${SITE_LABEL_PROD[site]}\n`;
+    if(issue) text += `  Issue: ${issue}\n`;
+    if(plan) text += `  Action Plan: ${plan}\n`;
+    text += '\n';
+  });
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyNotesBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Tersalin';
+    setTimeout(()=>btn.textContent = orig, 1500);
+  }).catch(() => alert('Gagal menyalin. Browser mungkin tidak mengizinkan akses clipboard.'));
+});
 
 // ===== Insentif aggregation =====
 function insentifForRange(months){
