@@ -124,6 +124,54 @@ function renderProductivity(){
     card.innerHTML = `<div class="route-head">${SITE_LABEL_PROD[site]}</div><div class="route-body">${body}</div>`;
     grid.appendChild(card);
   });
+
+  renderProdInsight(cur, prev);
+}
+
+function renderProdInsight(cur, prev){
+  const box = document.getElementById('prodInsight');
+  const sitesWithData = ROUTE_ORDER.filter(s => cur[s]);
+  if(sitesWithData.length === 0){
+    box.className = 'insight-box';
+    box.innerHTML = '<b>Insight:</b><p>Tidak ada data produktivitas pada periode ini.</p>';
+    return;
+  }
+
+  // lowest OLF site (weakest performer)
+  const worstOlf = sitesWithData.reduce((a,b) => cur[a].olf <= cur[b].olf ? a : b);
+  const bestOlf = sitesWithData.reduce((a,b) => cur[a].olf >= cur[b].olf ? a : b);
+
+  // sites whose OLF declined vs previous period, sorted by steepest drop
+  const declining = sitesWithData
+    .filter(s => prev[s])
+    .map(s => ({site:s, delta: cur[s].olf - prev[s].olf}))
+    .filter(d => d.delta < -0.05)
+    .sort((a,b) => a.delta - b.delta);
+
+  // sites whose DO/Trip declined the most (secondary signal)
+  const doDeclining = sitesWithData
+    .filter(s => prev[s])
+    .map(s => ({site:s, delta: cur[s].doTrip - prev[s].doTrip}))
+    .filter(d => d.delta < -0.1)
+    .sort((a,b) => a.delta - b.delta);
+
+  const hasRedFlag = declining.length > 0 || cur[worstOlf].olf < 80;
+  box.className = 'insight-box' + (hasRedFlag ? ' red' : '');
+
+  let items = '';
+  items += `<li>🚚 <b>${SITE_LABEL_PROD[worstOlf]}</b> — OLF terendah di antara 5 jalur (${cur[worstOlf].olf.toFixed(1)}%)${cur[worstOlf].olf<80?', di bawah target 80%':''}.</li>`;
+  if(declining.length){
+    declining.slice(0,2).forEach(d => {
+      items += `<li>📉 <b>${SITE_LABEL_PROD[d.site]}</b> — OLF turun ${Math.abs(d.delta).toFixed(1)} pt dibanding periode sebelumnya, perlu ditelusuri penyebabnya.</li>`;
+    });
+  }
+  if(doDeclining.length){
+    const d = doDeclining[0];
+    items += `<li>⬇️ <b>${SITE_LABEL_PROD[d.site]}</b> — DO/Trip turun ${Math.abs(d.delta).toFixed(1)} dibanding periode sebelumnya, indikasi utilisasi trip melemah.</li>`;
+  }
+  items += `<li>✅ <b>${SITE_LABEL_PROD[bestOlf]}</b> tetap jalur dengan OLF tertinggi (${cur[bestOlf].olf.toFixed(1)}%).</li>`;
+
+  box.innerHTML = `<b>${hasRedFlag ? '⚠️ Perlu Perhatian:' : 'Insight:'}</b><ul>${items}</ul>`;
 }
 
 // ===== Insentif aggregation =====
@@ -253,78 +301,126 @@ function renderTrend(){
 
 // ===== Fleet =====
 const FLEET_SITE_LABEL = {'HCI Jababeka':'HCI Jababeka','AHI Jababeka':'AHI Jababeka','HCI Cikupa':'HCI Cikupa','IND Jababeka':'IND Jababeka','Corp Sidoarjo':'Corp Sidoarjo','Corp Tamora':'Corp Tamora'};
-let fleetChartObj = null;
 
-function renderFleet(){
-  const fromISO = toISO(state.from), toISOs = toISO(state.to);
-  const rows = FLEET_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
+function isFullMonth(fromDate, toDate){
+  const y = fromDate.getUTCFullYear(), m = fromDate.getUTCMonth();
+  const monthStart = new Date(Date.UTC(y, m, 1));
+  const monthEnd = new Date(Date.UTC(y, m+1, 0));
+  return fromDate.getTime()===monthStart.getTime() && toDate.getTime()===monthEnd.getTime();
+}
 
+function sumFleetBySite(rows){
   const bySite = {};
   rows.forEach(r => {
     if(!bySite[r.site]) bySite[r.site] = {trips:0, cbm:0};
     bySite[r.site].trips += r.trips;
     bySite[r.site].cbm += r.cbm;
   });
+  return bySite;
+}
+
+function renderFleet(){
+  const fromISO = toISO(state.from), toISOs = toISO(state.to);
+  const rows = FLEET_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
+  const [pf, pt] = prevPeriod(state.from, state.to);
+  const prevRows = FLEET_DATA.filter(r => r.date >= toISO(pf) && r.date <= toISO(pt));
+
+  const bySite = sumFleetBySite(rows);
+  const prevBySite = sumFleetBySite(prevRows);
+
   const totalTrips = rows.reduce((a,r)=>a+r.trips,0);
   const totalCbm = rows.reduce((a,r)=>a+r.cbm,0);
+  const prevTotalTrips = prevRows.reduce((a,r)=>a+r.trips,0);
 
-  const kpiRow = document.getElementById('fleetKpiRow');
-  kpiRow.innerHTML = `
-    <div class="kpi"><div class="lbl">Total Trip</div><div class="val">${fmtNum(totalTrips)}</div><div class="sub">periode terpilih</div></div>
-    <div class="kpi"><div class="lbl">Total CBM</div><div class="val">${fmtNum(totalCbm)}</div><div class="sub">periode terpilih</div></div>
-    <div class="kpi"><div class="lbl">Rata CBM/Trip</div><div class="val">${totalTrips? (totalCbm/totalTrips).toFixed(1):'0'}</div><div class="sub">efisiensi muatan</div></div>
-  `;
+  document.getElementById('fleetTag').textContent = fromISO + ' → ' + toISOs;
+  document.getElementById('fleetKpiTrip').textContent = fmtNum(totalTrips) + ' trip';
+  const tripDelta = totalTrips - prevTotalTrips;
+  const tripUp = tripDelta >= 0;
+  const tripDeltaEl = document.getElementById('fleetKpiTripDelta');
+  tripDeltaEl.innerHTML =
+    (prevRows.length ? (tripUp ? '▲ +' : '▼ ') + fmtNum(Math.abs(tripDelta)) + ' trip vs periode lalu (' + fmtNum(prevTotalTrips) + ')' : 'Tidak ada data pembanding');
+  tripDeltaEl.style.color = tripUp ? '#86efac' : '#fca5a5';
+
+  document.getElementById('fleetKpiCbm').textContent = fmtNum(totalCbm) + ' CBM';
+  document.getElementById('fleetKpiCbmSub').textContent = totalTrips ? ('Rata-rata ' + (totalCbm/totalTrips).toFixed(1) + ' CBM/trip') : '—';
 
   const tbody = document.querySelector('#fleetTable tbody');
   tbody.innerHTML = '';
   const sites = Object.keys(bySite).sort((a,b)=>bySite[b].trips-bySite[a].trips);
   if(sites.length===0){
-    tbody.innerHTML = '<tr><td colspan="4" class="empty">Tidak ada data pada periode ini</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Tidak ada data pada periode ini</td></tr>';
   } else {
     sites.forEach(s => {
       const v = bySite[s];
+      const pv = prevBySite[s] ? prevBySite[s].trips : 0;
+      const delta = v.trips - pv;
+      const deltaCls = delta >= 0 ? 'green' : 'red';
+      const deltaStr = (delta >= 0 ? '+' : '') + delta;
       tbody.innerHTML += `<tr><td style="font-weight:700;">${s}</td>
         <td class="mono">${fmtNum(v.trips)}</td>
         <td class="mono">${fmtNum(v.cbm)}</td>
-        <td class="mono">${v.trips? (v.cbm/v.trips).toFixed(1):'0'}</td></tr>`;
+        <td class="mono" style="color:var(--t3);">${fmtNum(pv)}</td>
+        <td><span class="badge ${deltaCls}">${deltaStr}</span></td></tr>`;
     });
   }
 
-  // trend chart: daily total trips, grouped weekly if range > 45 days
-  const dayMap = {};
-  rows.forEach(r => { dayMap[r.date] = (dayMap[r.date]||0) + r.trips; });
-  const days = Object.keys(dayMap).sort();
-  const rangeDays = Math.round((state.to-state.from)/86400000)+1;
-
-  let labels, values;
-  if(rangeDays > 45){
-    // weekly buckets
-    const weekMap = {};
-    days.forEach(d => {
-      const dt = new Date(d+'T00:00:00Z');
-      const weekStart = new Date(dt); weekStart.setUTCDate(dt.getUTCDate() - dt.getUTCDay());
-      const wk = toISO(weekStart);
-      weekMap[wk] = (weekMap[wk]||0) + dayMap[d];
+  // ---- Cost panel: only shown for an exact full-month range ----
+  const costPanel = document.getElementById('costPanel');
+  const costTag = document.getElementById('costTag');
+  const costBody = document.getElementById('costBody');
+  if(isFullMonth(state.from, state.to)){
+    costTag.textContent = MONTH_SHORT[fromISO.slice(5,7)] + ' ' + fromISO.slice(0,4);
+    const costRows = FLEET_COST_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
+    const bySiteCost = {};
+    costRows.forEach(r => {
+      if(!bySiteCost[r.site]) bySiteCost[r.site] = {trips:0, costInt:0, costExt:0};
+      bySiteCost[r.site].trips += r.trips;
+      bySiteCost[r.site].costInt += r.costInt;
+      bySiteCost[r.site].costExt += r.costExt;
     });
-    labels = Object.keys(weekMap).sort();
-    values = labels.map(k=>weekMap[k]);
-    labels = labels.map(l => l.slice(5));
+    const totalCI = costRows.reduce((a,r)=>a+r.costInt,0);
+    const totalCE = costRows.reduce((a,r)=>a+r.costExt,0);
+    const saving = totalCE - totalCI;
+    const savingPct = totalCE ? (saving/totalCE*100) : 0;
+
+    let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;">
+      <div class="kpi" style="box-shadow:none;">
+        <div class="lbl">Cost Internal</div><div class="val">${fmtRpJt(totalCI)}</div>
+      </div>
+      <div class="kpi" style="box-shadow:none;">
+        <div class="lbl">Cost Eksternal (jika full via LK)</div><div class="val">${fmtRpJt(totalCE)}</div>
+      </div>
+      <div class="kpi" style="box-shadow:none;background:${saving>=0?'var(--gbg)':'var(--rbg)'};">
+        <div class="lbl">Saving Fleet Internal</div>
+        <div class="val" style="color:${saving>=0?'var(--green)':'var(--red)'};">${fmtRpJt(saving)}</div>
+        <div class="sub">${savingPct.toFixed(1)}% lebih hemat vs eksternal</div>
+      </div>
+    </div>
+    <table class="dt"><thead><tr><th>Site / BU</th><th>Trip</th><th>Cost Internal</th><th>Cost Eksternal</th><th>Saving</th></tr></thead><tbody>`;
+    Object.keys(bySiteCost).sort((a,b)=>bySiteCost[b].costInt-bySiteCost[a].costInt).forEach(s => {
+      const v = bySiteCost[s];
+      const sv = v.costExt - v.costInt;
+      html += `<tr><td style="font-weight:700;">${s}</td>
+        <td class="mono">${fmtNum(v.trips)}</td>
+        <td class="mono">${fmtRp(v.costInt)}</td>
+        <td class="mono">${fmtRp(v.costExt)}</td>
+        <td class="mono" style="color:${sv>=0?'var(--green)':'var(--red)'};font-weight:700;">${fmtRp(sv)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    costBody.innerHTML = html;
+    costPanel.style.display = '';
   } else {
-    labels = days.map(d=>d.slice(5));
-    values = days.map(d=>dayMap[d]);
+    costTag.textContent = 'perlu 1 bulan penuh';
+    costBody.innerHTML = `<div class="empty">Data cost hanya ditampilkan kalau rentang tanggal yang dipilih pas satu bulan penuh (misal 1–31 Juli). Rentang saat ini: ${fromISO} → ${toISOs}.</div>`;
   }
 
-  const ctx = document.getElementById('fleetChart').getContext('2d');
-  if(fleetChartObj) fleetChartObj.destroy();
-  fleetChartObj = new Chart(ctx, {
-    type:'bar',
-    data:{ labels, datasets:[{ label:'Total Trip', data: values, backgroundColor:'#1a2e6b', borderRadius:3 }] },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
-      scales:{ y:{beginAtZero:true, grid:{color:'#e3e8f2'}}, x:{grid:{display:false}, ticks:{maxRotation:60,minRotation:60}} }
-    }
-  });
+  // insight
+  const topSite = sites[0];
+  const worstDelta = sites.map(s=>({s, d: bySite[s].trips - (prevBySite[s]?prevBySite[s].trips:0)})).sort((a,b)=>a.d-b.d)[0];
+  document.getElementById('fleetInsight').innerHTML = `<b>Insight:</b><p>
+    ${topSite ? topSite : '-'} mencatat volume trip eksternal tertinggi pada periode ini (${topSite?fmtNum(bySite[topSite].trips):'-'} trip).
+    ${worstDelta && worstDelta.d<0 ? worstDelta.s + ' turun paling tajam (' + worstDelta.d + ' trip) dibanding periode sebelumnya — perlu ditelusuri.' : 'Semua site menunjukkan tren stabil atau naik dibanding periode sebelumnya.'}
+  </p>`;
 }
 
 // ===== Overview KPIs =====
