@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monthly Report — Internal NDC & RDC</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{
+  --sw:230px;
+  --navy:#1a2e6b; --navy-d:#12204d; --ice:#cadcfc;
+  --bg:#f4f6fb; --surface:#ffffff; --border:#e3e8f2;
+  --text:#0f1b3d; --t2:#5b6785; --t3:#94a1c2;
+  --teal:#1c7293; --green:#16a34a; --gbg:#f0fdf4;
+  --red:#dc2626; --rbg:#fef2f2;
+  --amber:#d97706; --abg:#fffbeb;
+  --shadow:0 1px 3px rgba(15,27,61,.06); --shadow-md:0 8px 24px rgba(15,27,61,.10);
+  --r:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;font-size:13.5px;}
+.mono{font-family:'JetBrains Mono',monospace;}
+
+/* Sidebar */
+.sidebar{width:var(--sw);background:linear-gradient(180deg,var(--navy) 0%,var(--navy-d) 100%);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:20;}
+.s-logo{padding:22px 20px 18px;border-bottom:1px solid rgba(255,255,255,.1);}
+.s-title{font-weight:800;font-size:15px;color:#fff;letter-spacing:.3px;}
+.s-sub{font-size:10.5px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1.2px;margin-top:3px;}
+.s-nav{padding:16px 12px;flex:1;}
+.s-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;cursor:pointer;color:rgba(255,255,255,.68);font-size:13px;font-weight:500;margin-bottom:2px;transition:all .15s;}
+.s-item:hover{background:rgba(255,255,255,.07);color:#fff;}
+.s-item.active{background:rgba(255,255,255,.14);color:#fff;font-weight:700;}
+.s-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0;}
+.s-foot{padding:16px 20px;border-top:1px solid rgba(255,255,255,.1);font-size:10.5px;color:rgba(255,255,255,.4);}
+
+/* Main */
+.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.tb-title{font-size:17px;font-weight:800;color:var(--text);}
+.tb-sub{font-size:11.5px;color:var(--t3);margin-top:2px;}
+.tb-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.filt{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:6px 10px;}
+.filt label{font-size:10.5px;color:var(--t2);font-weight:600;}
+.filt input[type=date]{border:none;background:transparent;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);outline:none;}
+.btn{border:none;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all .15s;}
+.btn-primary{background:var(--navy);color:#fff;}
+.btn-primary:hover{background:var(--navy-d);}
+.btn-ghost{background:var(--surface);color:var(--text);border:1px solid var(--border);}
+.btn-ghost:hover{background:var(--bg);}
+.btn-pdf{background:var(--teal);color:#fff;}
+.btn-pdf:hover{background:#155e75;}
+.range-chip{font-size:11px;color:var(--t2);background:var(--ice);color:var(--navy);padding:5px 10px;border-radius:20px;font-weight:700;}
+
+.content{padding:24px 28px 60px;flex:1;}
+.section{margin-bottom:34px;scroll-margin-top:90px;}
+.sec-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:6px;}
+.sec-title{font-size:19px;font-weight:800;color:var(--text);}
+.sec-note{font-size:11.5px;color:var(--t3);}
+
+/* KPI row */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px;}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow);}
+.kpi .lbl{font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px;}
+.kpi .val{font-size:26px;font-weight:800;color:var(--navy);font-family:'JetBrains Mono',monospace;line-height:1;}
+.kpi .sub{font-size:11px;color:var(--t2);margin-top:6px;}
+.kpi .sub.up{color:var(--green);}
+.kpi .sub.down{color:var(--red);}
+
+/* Route cards (Productivity) */
+.route-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.route-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);}
+.route-head{background:var(--navy);color:#fff;padding:12px 14px;font-weight:700;font-size:14px;}
+.route-body{padding:14px;}
+.rm{margin-bottom:12px;}
+.rm:last-child{margin-bottom:0;}
+.rm .rl{font-size:9.5px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+.rm .rv{font-size:19px;font-weight:800;color:var(--navy);font-family:'JetBrains Mono',monospace;margin:3px 0 2px;}
+.rm .rd{font-size:10px;font-weight:700;}
+.rm .rd.up{color:var(--green);}
+.rm .rd.down{color:var(--red);}
+.rm .rd.flat{color:var(--t3);}
+
+/* Panels */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;}
+.ph{padding:14px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.ph h3{font-size:14px;font-weight:800;color:var(--text);}
+.ph .tag{font-size:10.5px;color:var(--t3);background:var(--bg);border:1px solid var(--border);padding:3px 9px;border-radius:20px;}
+.pb{padding:16px 18px;}
+
+.grid2{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;align-items:start;}
+
+table.dt{width:100%;border-collapse:collapse;font-size:12px;}
+.dt thead th{padding:9px 11px;text-align:right;font-weight:700;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);white-space:nowrap;background:var(--bg);}
+.dt thead th:first-child,.dt thead th:nth-child(2){text-align:left;}
+.dt tbody td{padding:8px 11px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right;}
+.dt tbody td:first-child,.dt tbody td:nth-child(2){text-align:left;}
+.dt tbody tr:last-child td{border-bottom:none;}
+.dt tbody tr:hover{background:var(--bg);}
+.rank{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--bg);color:var(--t2);font-size:10px;font-weight:800;}
+.rank.top{background:var(--navy);color:#fff;}
+
+.dist-bar{margin-bottom:14px;}
+.dist-bar .db-label{font-size:11.5px;color:var(--text);font-weight:600;margin-bottom:5px;display:flex;justify-content:space-between;}
+.db-track{height:20px;background:var(--bg);border-radius:6px;overflow:hidden;}
+.db-fill{height:100%;border-radius:6px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;color:#fff;font-size:10px;font-weight:800;}
+
+.insight-box{background:var(--abg);border:1px solid #fde68a;border-radius:12px;padding:14px 16px;margin-top:16px;}
+.insight-box b{color:var(--amber);}
+.insight-box.blue{background:#eff6ff;border-color:#bfdbfe;}
+.insight-box.blue b{color:var(--navy);}
+.insight-box p{font-size:12px;color:#1e293b;line-height:1.5;margin-top:4px;}
+
+.chart-wrap{position:relative;height:320px;}
+.chart-wrap.tall{height:360px;}
+
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700;}
+.badge.green{background:var(--gbg);color:var(--green);}
+.badge.red{background:var(--rbg);color:var(--red);}
+.badge.gray{background:var(--bg);color:var(--t2);}
+
+.empty{padding:30px;text-align:center;color:var(--t3);font-size:12.5px;}
+
+/* Print / export */
+@media print{
+  .sidebar,.topbar .tb-right,.no-print{display:none !important;}
+  .main{margin-left:0;}
+  body{background:#fff;}
+  .content{padding:0 8px;}
+  .section{page-break-inside:avoid;margin-bottom:22px;}
+  .kpi-row,.route-grid{gap:8px;}
+  .panel,.kpi,.route-card{box-shadow:none;border:1px solid #ccc;}
+  .topbar{position:static;border-bottom:2px solid var(--navy);padding:10px 8px;}
+}
+body.export-mode .sidebar,body.export-mode .tb-right .no-export{display:none;}
+body.export-mode .main{margin-left:0;}
+
+@media (max-width:1100px){
+  .route-grid{grid-template-columns:repeat(3,1fr);}
+  .kpi-row{grid-template-columns:repeat(2,1fr);}
+  .grid2{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar no-print">
+  <div class="s-logo">
+    <div class="s-title">Kawan Lama Group</div>
+    <div class="s-sub">SCM · NDC-RDC Report</div>
+  </div>
+  <div class="s-nav">
+    <div class="s-item active" data-scroll="sec-overview"><span class="s-dot"></span>Overview</div>
+    <div class="s-item" data-scroll="sec-prod"><span class="s-dot"></span>Productivity per Jalur</div>
+    <div class="s-item" data-scroll="sec-ins"><span class="s-dot"></span>Insentif NDC</div>
+    <div class="s-item" data-scroll="sec-trend"><span class="s-dot"></span>Trend Insentif</div>
+    <div class="s-item" data-scroll="sec-fleet"><span class="s-dot"></span>Support Fleet LK</div>
+  </div>
+  <div class="s-foot">Data: dashboard_ndc_rdc · dashboard_insentif_2026 · lk-internal-fleet-dashboard</div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="tb-title">Monthly Report — Internal NDC &amp; RDC</div>
+      <div class="tb-sub">Productivity · Insentif · Fleet Support</div>
+    </div>
+    <div class="tb-right">
+      <div class="filt no-print">
+        <label>Dari</label>
+        <input type="date" id="dateFrom">
+        <span style="color:var(--t3)">—</span>
+        <label>Sampai</label>
+        <input type="date" id="dateTo">
+      </div>
+      <button class="btn btn-primary no-export" id="applyBtn">Terapkan</button>
+      <button class="btn btn-ghost no-export" id="resetBtn">Reset</button>
+      <button class="btn btn-pdf no-export" id="pdfBtn">⬇ Export PDF</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <div class="section" id="sec-overview">
+      <div class="sec-head">
+        <div class="sec-title">Ringkasan Periode</div>
+        <div class="range-chip" id="rangeChip">—</div>
+      </div>
+      <div class="kpi-row" id="kpiRow"></div>
+    </div>
+
+    <div class="section" id="sec-prod">
+      <div class="sec-head">
+        <div class="sec-title">Productivity per Jalur — NDC &amp; RDC</div>
+        <div class="sec-note" id="prodNote">rata-rata periode terpilih vs periode sebelumnya</div>
+      </div>
+      <div class="route-grid" id="routeGrid"></div>
+    </div>
+
+    <div class="section" id="sec-ins">
+      <div class="sec-head">
+        <div class="sec-title">Insentif Driver &amp; Kenek — NDC</div>
+        <div class="sec-note">Site: Jababeka (JBBK) · Cikupa (CKP) · Sidoarjo (SDA)</div>
+      </div>
+      <div class="kpi-row" id="insKpiRow" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;"></div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="ph"><h3>Top 10 Penerima Insentif</h3><span class="tag" id="insTag">periode</span></div>
+          <div class="pb" style="padding:0;">
+            <table class="dt" id="topTable">
+              <thead><tr><th>#</th><th>Nama</th><th>Site</th><th>Role</th><th>Insentif (Rp)</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h3>Distribusi Kategori Insentif</h3></div>
+          <div class="pb" id="distBox"></div>
+        </div>
+      </div>
+      <div class="insight-box blue" id="insInsight"></div>
+    </div>
+
+    <div class="section" id="sec-trend">
+      <div class="sec-head">
+        <div class="sec-title">Trend Insentif — NDC</div>
+        <div class="sec-note">Total insentif bulanan pada periode terpilih</div>
+      </div>
+      <div class="panel">
+        <div class="pb"><div class="chart-wrap"><canvas id="trendChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="section" id="sec-fleet">
+      <div class="sec-head">
+        <div class="sec-title">Support Delivery LK — Internal Fleet</div>
+        <div class="sec-note">Trip &amp; CBM armada eksternal pendukung, filter tanggal harian</div>
+      </div>
+      <div class="kpi-row" id="fleetKpiRow" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;"></div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="ph"><h3>Trend Trip Harian per Site</h3></div>
+          <div class="pb"><div class="chart-wrap tall"><canvas id="fleetChart"></canvas></div></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h3>Ringkasan per Site</h3></div>
+          <div class="pb" style="padding:0;">
+            <table class="dt" id="fleetTable">
+              <thead><tr><th>Site / BU</th><th>Trip</th><th>CBM</th><th>CBM/Trip</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="data_embed.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
