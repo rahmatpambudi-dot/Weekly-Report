@@ -215,6 +215,26 @@ body.export-mode .main{margin-left:0;}
         <div class="sec-title">Productivity per Jalur — NDC &amp; RDC</div>
         <div class="sec-note" id="prodNote">rata-rata periode terpilih vs periode sebelumnya</div>
       </div>
+      <div class="panel" id="ndcRdcAvgPanel" style="margin-bottom:16px;background:var(--navy);border-color:var(--navy);">
+        <div class="pb" style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+          <div>
+            <div class="lbl" style="color:var(--ice);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;">OLF NDC-RDC (avg 5 jalur)</div>
+            <div class="val" id="avgOlfVal" style="color:#fff;font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-top:6px;">-</div>
+          </div>
+          <div>
+            <div class="lbl" style="color:var(--ice);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;">Ritase NDC-RDC</div>
+            <div class="val" id="avgRitaseVal" style="color:#fff;font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-top:6px;">-</div>
+          </div>
+          <div>
+            <div class="lbl" style="color:var(--ice);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;">DO/Trip NDC-RDC</div>
+            <div class="val" id="avgDoTripVal" style="color:#fff;font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-top:6px;">-</div>
+          </div>
+          <div>
+            <div class="lbl" style="color:var(--ice);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;">DP/Trip NDC-RDC (Reg)</div>
+            <div class="val" id="avgDpTripVal" style="color:#fff;font-size:24px;font-weight:800;font-family:'JetBrains Mono',monospace;margin-top:6px;">-</div>
+          </div>
+        </div>
+      </div>
       <div class="route-grid" id="routeGrid"></div>
       <div class="insight-box" id="prodInsight" style="margin-top:16px;"></div>
 
@@ -299,6 +319,19 @@ body.export-mode .main{margin-left:0;}
       </div>
 
       <div class="insight-box" id="fleetInsight"></div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="ph"><h3>Trend Trip — 2025 vs 2026</h3><span class="tag" id="trendYoyTag">Jan–Agu</span></div>
+        <div class="pb">
+          <div class="chart-wrap"><canvas id="yoyTrendChart"></canvas></div>
+          <div style="font-size:11px;color:var(--t3);margin-top:8px;" id="yoyTrendFooter"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:16px;">
+        <div class="ph"><h3>Kontribusi Internal per Area (2026)</h3><span class="tag">% trip internal dari total (internal+eksternal)</span></div>
+        <div class="pb" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;" id="areaContribGrid"></div>
+      </div>
     </div>
 
   </div>
