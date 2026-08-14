@@ -77,9 +77,21 @@ function avgProdForRange(months){
     const rows = PROD_DATA.monthly.filter(r => r.site===site && months.includes(r.month));
     if(rows.length===0){ out[site]=null; return; }
     const avg = k => rows.reduce((a,r)=>a+r[k],0)/rows.length;
-    out[site] = { olf: avg('olf')*100, ritase: avg('ritase'), doTrip: avg('doTrip'), tatDirect: avg('tatDirect') };
+    out[site] = { olf: avg('olf')*100, ritase: avg('ritase'), doTrip: avg('doTrip'), tatDirect: avg('tatDirect'), dpReg: avg('dpReg') };
   });
   return out;
+}
+
+// Combined NDC-RDC average across all 5 routes (simple mean of route-level metrics)
+function combinedProdAvg(months){
+  const perSite = avgProdForRange(months);
+  const valid = ROUTE_ORDER.map(s => perSite[s]).filter(Boolean);
+  if(valid.length===0) return null;
+  const avg = k => valid.reduce((a,d)=>a+d[k],0)/valid.length;
+  return {
+    olf: avg('olf'), ritase: avg('ritase'), doTrip: avg('doTrip'), dpReg: avg('dpReg'), tatDirect: avg('tatDirect'),
+    routeCount: valid.length
+  };
 }
 
 function renderProductivity(){
@@ -88,6 +100,17 @@ function renderProductivity(){
   const prevMonths = monthsOverlapping(pf, pt).filter(m => !months.includes(m));
   const cur = avgProdForRange(months);
   const prev = avgProdForRange(prevMonths.length ? prevMonths : months);
+
+  // NDC-RDC combined average card
+  const combo = combinedProdAvg(months);
+  if(combo){
+    document.getElementById('avgOlfVal').textContent = combo.olf.toFixed(1) + '%';
+    document.getElementById('avgRitaseVal').textContent = combo.ritase.toFixed(2);
+    document.getElementById('avgDoTripVal').textContent = combo.doTrip.toFixed(1);
+    document.getElementById('avgDpTripVal').textContent = combo.dpReg.toFixed(1);
+  } else {
+    ['avgOlfVal','avgRitaseVal','avgDoTripVal','avgDpTripVal'].forEach(id => document.getElementById(id).textContent = '-');
+  }
 
   document.getElementById('prodNote').textContent =
     months.length + ' bulan terpilih (' + months.map(m=>MONTH_SHORT[m.slice(5)]).join(', ') + ')' +
@@ -495,6 +518,59 @@ function renderFleet(){
     ${topSite ? topSite : '-'} mencatat volume trip eksternal tertinggi pada periode ini (${topSite?fmtNum(bySite[topSite].trips):'-'} trip).
     ${worstDelta && worstDelta.d<0 ? worstDelta.s + ' turun paling tajam (' + worstDelta.d + ' trip) dibanding periode sebelumnya — perlu ditelusuri.' : 'Semua site menunjukkan tren stabil atau naik dibanding periode sebelumnya.'}
   </p>`;
+
+  renderYoyTrend();
+  renderAreaContrib();
+}
+
+// ===== YoY trip trend (2025 vs 2026) — uses fixed pre-computed dataset =====
+let yoyTrendChartObj = null;
+function renderYoyTrend(){
+  const d = SUPPORT_LK_DATA.trend;
+  document.getElementById('yoyTrendFooter').textContent =
+    `Total 2025 (1 Jan–9 Agu): ${fmtNum(d.total2025)} trip · Total 2026 (1 Jan–9 Agu): ${fmtNum(d.total2026)} trip`;
+
+  const ctx = document.getElementById('yoyTrendChart').getContext('2d');
+  if(yoyTrendChartObj) yoyTrendChartObj.destroy();
+  yoyTrendChartObj = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: [
+        { label:'2026', data: d.data2026, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:3, pointRadius:4, tension:.3 },
+        { label:'2025', data: d.data2025, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:true, position:'top', align:'end'} },
+      scales:{ y:{ beginAtZero:true, grid:{color:'#e3e8f2'}, title:{display:true,text:'Trip'} }, x:{ grid:{display:false} } }
+    }
+  });
+}
+
+// ===== Area contribution pies (Internal vs Eksternal, 2026) =====
+function renderAreaContrib(){
+  const grid = document.getElementById('areaContribGrid');
+  grid.innerHTML = '';
+  const colors = {'Jawa Barat':'#266CA9','Lampung':'#f5a623','Jawa Timur':'#8b6cf7'};
+  SUPPORT_LK_DATA.area_contrib.forEach(a => {
+    const tot = a.internal + a.external;
+    const pct = tot ? Math.round(a.internal/tot*100) : 0;
+    const col = colors[a.area] || 'var(--navy)';
+    const card = document.createElement('div');
+    card.style.textAlign = 'center';
+    card.innerHTML = `
+      <div style="font-size:13px;font-weight:800;color:${col};margin-bottom:8px;">${a.area} — ${pct}%</div>
+      <svg viewBox="0 0 100 100" style="width:100%;max-width:140px;margin:0 auto;display:block;">
+        <circle cx="50" cy="50" r="40" fill="none" stroke="#e3e8f2" stroke-width="20"/>
+        <circle cx="50" cy="50" r="40" fill="none" stroke="${col}" stroke-width="20"
+          stroke-dasharray="${(pct/100*251.2).toFixed(1)} 251.2" stroke-dashoffset="62.8" transform="rotate(-90 50 50)"/>
+      </svg>
+      <div style="font-size:11px;color:var(--t3);margin-top:8px;">Internal: ${fmtNum(a.internal)} · Eksternal: ${fmtNum(a.external)}</div>
+    `;
+    grid.appendChild(card);
+  });
 }
 
 // ===== Overview KPIs =====
