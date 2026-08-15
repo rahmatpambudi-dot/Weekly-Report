@@ -168,42 +168,29 @@ function renderProdInsight(cur, prev){
     return;
   }
 
-  // lowest OLF site (weakest performer)
+  // lowest OLF site (weakest performer) — used for context even when it's still above target
   const worstOlf = sitesWithData.reduce((a,b) => cur[a].olf <= cur[b].olf ? a : b);
   const bestOlf = sitesWithData.reduce((a,b) => cur[a].olf >= cur[b].olf ? a : b);
 
-  // sites whose OLF declined vs previous period, sorted by steepest drop
-  const declining = sitesWithData
-    .filter(s => prev[s])
-    .map(s => ({site:s, delta: cur[s].olf - prev[s].olf}))
-    .filter(d => d.delta < -0.05)
-    .sort((a,b) => a.delta - b.delta);
-
-  // sites whose DO/Trip declined the most (secondary signal)
-  const doDeclining = sitesWithData
-    .filter(s => prev[s])
-    .map(s => ({site:s, delta: cur[s].doTrip - prev[s].doTrip}))
-    .filter(d => d.delta < -0.1)
-    .sort((a,b) => a.delta - b.delta);
-
-  // sites currently below the OLF target — this is what drives the red flag now
-  const belowTarget = sitesWithData.filter(s => cur[s].olf < OLF_TARGET);
+  // sites currently below the OLF target — the ONLY thing that drives "Perlu Perhatian" now
+  const belowTarget = sitesWithData
+    .filter(s => cur[s].olf < OLF_TARGET)
+    .sort((a,b) => cur[a].olf - cur[b].olf);
 
   const hasRedFlag = belowTarget.length > 0;
   box.className = 'insight-box' + (hasRedFlag ? ' red' : '');
 
   let items = '';
-  items += `<li>🚚 <b>${SITE_LABEL_PROD[worstOlf]}</b> — OLF terendah di antara 5 jalur (${cur[worstOlf].olf.toFixed(1)}%)${cur[worstOlf].olf<OLF_TARGET?', di bawah target '+OLF_TARGET+'%':''}.</li>`;
-  if(declining.length){
-    declining.slice(0,2).forEach(d => {
-      items += `<li>📉 <b>${SITE_LABEL_PROD[d.site]}</b> — OLF turun ${Math.abs(d.delta).toFixed(1)} pt dibanding periode sebelumnya, perlu ditelusuri penyebabnya.</li>`;
+  if(hasRedFlag){
+    belowTarget.forEach(site => {
+      const d = cur[site], p = prev[site];
+      const deltaTxt = p ? `, ${d.olf - p.olf >= 0 ? 'naik' : 'turun'} ${Math.abs(d.olf - p.olf).toFixed(1)} pt dibanding periode sebelumnya` : '';
+      items += `<li>🚚 <b>${SITE_LABEL_PROD[site]}</b> — OLF ${d.olf.toFixed(1)}%, di bawah target ${OLF_TARGET}%${deltaTxt}.</li>`;
     });
+  } else {
+    items += `<li>✅ Semua jalur sudah mencapai target OLF ${OLF_TARGET}%.</li>`;
   }
-  if(doDeclining.length){
-    const d = doDeclining[0];
-    items += `<li>⬇️ <b>${SITE_LABEL_PROD[d.site]}</b> — DO/Trip turun ${Math.abs(d.delta).toFixed(1)} dibanding periode sebelumnya, indikasi utilisasi trip melemah.</li>`;
-  }
-  items += `<li>✅ <b>${SITE_LABEL_PROD[bestOlf]}</b> tetap jalur dengan OLF tertinggi (${cur[bestOlf].olf.toFixed(1)}%).</li>`;
+  items += `<li>${hasRedFlag?'✅':'🏆'} <b>${SITE_LABEL_PROD[bestOlf]}</b> jalur dengan OLF tertinggi (${cur[bestOlf].olf.toFixed(1)}%).</li>`;
 
   box.innerHTML = `<b>${hasRedFlag ? '⚠️ Perlu Perhatian:' : 'Insight:'}</b><ul>${items}</ul>`;
 
