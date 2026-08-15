@@ -35,7 +35,11 @@ let state = {
 };
 
 // ===== Init date pickers =====
-const dataMin = '2026-01-01', dataMax = '2026-08-09';
+// dataMax is derived from the latest date actually present in FLEET_DATA (daily-granularity
+// data), so the date picker automatically follows whatever's in data_embed.js instead of
+// needing a manual edit here every time the source data is refreshed.
+const dataMin = '2026-01-01';
+const dataMax = FLEET_DATA.reduce((max, r) => r.date > max ? r.date : max, FLEET_DATA[0].date);
 document.getElementById('dateFrom').min = dataMin;
 document.getElementById('dateFrom').max = dataMax;
 document.getElementById('dateTo').min = dataMin;
