@@ -246,8 +246,10 @@ function renderNotesGrid(cur, flaggedSet, onlySites){
   });
 
   grid.querySelectorAll('textarea').forEach(ta => {
+    autoGrowTextarea(ta);
     let debounce;
     ta.addEventListener('input', () => {
+      autoGrowTextarea(ta);
       clearTimeout(debounce);
       debounce = setTimeout(() => {
         saveNote(ta.dataset.site, ta.dataset.field, ta.value);
@@ -257,6 +259,12 @@ function renderNotesGrid(cur, flaggedSet, onlySites){
       }, 400);
     });
   });
+}
+
+// Grows a textarea's height to fit its content (no internal scrollbar), with a sensible floor.
+function autoGrowTextarea(ta){
+  ta.style.height = 'auto';
+  ta.style.height = Math.max(ta.scrollHeight, 60) + 'px';
 }
 
 document.getElementById('copyNotesBtn').addEventListener('click', () => {
@@ -605,10 +613,180 @@ function renderOverview(){
   `;
 }
 
+// ===== Efisiensi Operasional — MoM & YoY (from INSIGHT_DATA, sourced from Insentif 2026 dashboard) =====
+const MONTH_ORDER_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTH_SHORT_EN = {January:'Jan',February:'Feb',March:'Mar',April:'Apr',May:'Mei',June:'Jun',July:'Jul',August:'Agu',September:'Sep',October:'Okt',November:'Nov',December:'Des'};
+
+const EFF_METRICS = [
+  {key:'DO',   label:'Total Delivery Order (DO)', icon:'📦', kind:'neutral', fmt:v=>fmtNum(v)},
+  {key:'DP',   label:'Total Drop Point (DP)',      icon:'📍', kind:'neutral', fmt:v=>fmtNum(v)},
+  {key:'CBM',  label:'Total CBM',                   icon:'📦', kind:'neutral', fmt:v=>fmtNum(v,2)+' m³'},
+  {key:'Trip', label:'Total Trip',                  icon:'🚚', kind:'neutral', fmt:v=>fmtNum(v)},
+  {key:'DO/Trip', label:'Produktivitas DO/Trip',    icon:'📈', kind:'higher', fmt:v=>v.toFixed(2)},
+  {key:'DP/Trip', label:'Produktivitas DP/Trip',    icon:'📊', kind:'higher', fmt:v=>v.toFixed(2)},
+  {key:'DO/DP',   label:'Produktivitas DO/DP',      icon:'📦', kind:'higher', fmt:v=>v.toFixed(2)},
+  {key:'CBM/DP',  label:'Produktivitas CBM/DP',     icon:'📐', kind:'higher', fmt:v=>v.toFixed(2)},
+  {key:'UJP/Trip', label:'Biaya UJP/Trip',          icon:'💰', kind:'lower', fmt:v=>fmtRp(v)},
+  {key:'UJP/DO',   label:'Biaya UJP/DO',            icon:'⚖️', kind:'lower', fmt:v=>fmtRp(v)},
+  {key:'UJP/DP',   label:'Biaya UJP/DP',            icon:'🎯', kind:'lower', fmt:v=>fmtRp(v)},
+  {key:'UJP',      label:'Total Biaya UJP',         icon:'🧮', kind:'lower', fmt:v=>fmtRpJt(v)},
+  {key:'Insentif', label:'Biaya Insentif MPP',      icon:'💹', kind:'lower', fmt:v=>fmtRpJt(v)},
+];
+
+function latestInsightMonth(){
+  // last month key (in order) that has cur26 data
+  const keys = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
+  return keys[keys.length-1];
+}
+
+function effBadge(kind, pct){
+  if(kind === 'neutral'){
+    return {label: pct>=0?'NAIK':'TURUN', cls:'gray'};
+  }
+  if(kind === 'higher'){
+    return {label: pct>=0?'MEMBAIK':'MENURUN', cls: pct>=0?'green':'red'};
+  }
+  // lower-is-better (cost)
+  return {label: pct<=0?'MEMBAIK':'NAIK', cls: pct<=0?'green':'red'};
+}
+
+function renderEffCompare(containerId, from, to){
+  const body = document.getElementById(containerId);
+  if(!from || !to){ body.innerHTML = '<div class="empty">Data pembanding tidak tersedia.</div>'; return; }
+  let html = '';
+  EFF_METRICS.forEach(m => {
+    const a = from[m.key], b = to[m.key];
+    if(a===undefined || b===undefined || a===null || b===null) return;
+    const pct = a !== 0 ? ((b - a) / a * 100) : 0;
+    const badge = effBadge(m.kind, pct);
+    html += `<div class="eff-row">
+      <div class="eff-icon">${m.icon}</div>
+      <div class="eff-main">
+        <div class="eff-label">${m.label}</div>
+        <div class="eff-values">${m.fmt(a)} → <b>${m.fmt(b)}</b></div>
+      </div>
+      <div class="eff-right">
+        <span class="eff-pct ${pct>=0?'up':'down'}">${pct>=0?'▲':'▼'} ${Math.abs(pct).toFixed(1)}%</span>
+        <span class="badge ${badge.cls}">${badge.label}</span>
+      </div>
+    </div>`;
+  });
+  body.innerHTML = html;
+}
+
+function effConclusion(from, to){
+  const pct = k => from[k] ? (to[k]-from[k])/from[k]*100 : 0;
+  const pDO = pct('DO'), pDP = pct('DP'), pTrip = pct('Trip'), pDPTrip = pct('DP/Trip'),
+        pUJP = pct('UJP'), pIns = pct('Insentif');
+  const items = [];
+  items.push(`📦 Demand: DO ${pDO>=0?'+':''}${pDO.toFixed(1)}% &amp; DP ${pDP>=0?'+':''}${pDP.toFixed(1)}% (${(pDO<0&&pDP<0)?'↓ demand turun':(pDO>=0&&pDP>=0)?'↑ demand naik':'demand campuran'})`);
+  items.push(`📊 DP/Trip ${pDPTrip>=0?'+':''}${pDPTrip.toFixed(1)}% — armada makin ${pDPTrip>=0?'padat':'longgar'}`);
+  items.push(`🚚 Trip ${pTrip>=0?'naik':'turun'} ${Math.abs(pTrip).toFixed(1)}% ${((pTrip<0&&pDPTrip>=0)||(pTrip>=0&&pDPTrip>=0))?'— efisiensi armada meningkat':'— perlu ditelusuri'}`);
+  items.push(`💰 Biaya UJP ${pUJP.toFixed(1)}% &amp; Insentif ${pIns.toFixed(1)}% — ${(pUJP<=0&&pIns<=0)?'cost terkendali':'cost naik, perlu ditelusuri'}`);
+  return items;
+}
+
+function renderEfficiency(){
+  if(typeof INSIGHT_DATA === 'undefined') return;
+  const latest = latestInsightMonth();
+  if(!latest) return;
+  const d = INSIGHT_DATA[latest];
+  document.getElementById('effNote').textContent = `berdasarkan data ${MONTH_SHORT_EN[latest]} 2026 terbaru${d.cutoff_day?' (s.d. tgl '+d.cutoff_day+')':''}`;
+
+  // MoM
+  const prevMonthIdx = MONTH_ORDER_EN.indexOf(latest) - 1;
+  const prevMonthName = prevMonthIdx >= 0 ? MONTH_ORDER_EN[prevMonthIdx] : null;
+  const momFrom = d.prev26 || (prevMonthName && INSIGHT_DATA[prevMonthName] ? INSIGHT_DATA[prevMonthName].cur26 : null);
+  document.getElementById('effMomTag').textContent = prevMonthName ? `${MONTH_SHORT_EN[prevMonthName]} 2026 vs ${MONTH_SHORT_EN[latest]} 2026` : '-';
+  renderEffCompare('effMomBody', momFrom, d.cur26);
+
+  // YoY
+  document.getElementById('effYoyTag').textContent = `${MONTH_SHORT_EN[latest]} 2025 vs ${MONTH_SHORT_EN[latest]} 2026`;
+  renderEffCompare('effYoyBody', d.cur25, d.cur26);
+
+  // conclusions (append under each panel, once)
+  ['effMomBody','effYoyBody'].forEach((id, idx) => {
+    const from = idx===0 ? momFrom : d.cur25;
+    const panel = document.getElementById(id).closest('.panel');
+    let box = panel.querySelector('.conclusion-box');
+    if(!box){ box = document.createElement('div'); box.className='conclusion-box'; panel.querySelector('.pb').appendChild(box); }
+    if(!from){ box.innerHTML=''; return; }
+    const items = effConclusion(from, d.cur26);
+    box.innerHTML = `<div class="cb-title">✅ KESIMPULAN: Operasional Efisien</div><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul>`;
+  });
+
+  renderDoTripTrend();
+  renderInsUjpTrend();
+}
+
+let doTripTrendChartObj = null;
+function renderDoTripTrend(){
+  const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
+  const labels = months.map(m => MONTH_SHORT_EN[m]);
+  const do26 = months.map(m => INSIGHT_DATA[m].cur26.DO);
+  const do25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.DO : null);
+  const trip26 = months.map(m => INSIGHT_DATA[m].cur26.Trip);
+  const trip25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.Trip : null);
+
+  const ctx = document.getElementById('doTripTrendChart').getContext('2d');
+  if(doTripTrendChartObj) doTripTrendChartObj.destroy();
+  doTripTrendChartObj = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [
+      { label:'DO 2026', data:do26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:3, pointRadius:4, tension:.3, yAxisID:'yDo' },
+      { label:'DO 2025', data:do25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yDo' },
+      { label:'Trip 2026', data:trip26, borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,.08)', borderWidth:3, pointRadius:4, tension:.3, yAxisID:'yTrip' },
+      { label:'Trip 2025', data:trip25, borderColor:'#f7d38a', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yTrip' },
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:true, position:'top', align:'end'} },
+      scales:{
+        yDo:{ type:'linear', position:'left', beginAtZero:true, title:{display:true,text:'DO'}, grid:{color:'#e3e8f2'} },
+        yTrip:{ type:'linear', position:'right', beginAtZero:true, title:{display:true,text:'Trip'}, grid:{display:false} },
+        x:{ grid:{display:false} }
+      }
+    }
+  });
+}
+
+let insUjpTrendChartObj = null;
+function renderInsUjpTrend(){
+  const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
+  const labels = months.map(m => MONTH_SHORT_EN[m]);
+  const ins26 = months.map(m => INSIGHT_DATA[m].cur26.Insentif/1e6);
+  const ins25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.Insentif/1e6 : null);
+  const ujp26 = months.map(m => INSIGHT_DATA[m].cur26.UJP/1e6);
+  const ujp25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.UJP/1e6 : null);
+
+  const ctx = document.getElementById('insUjpTrendChart').getContext('2d');
+  if(insUjpTrendChartObj) insUjpTrendChartObj.destroy();
+  insUjpTrendChartObj = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [
+      { label:'Insentif 2026', data:ins26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:3, pointRadius:4, tension:.3, yAxisID:'yIns' },
+      { label:'Insentif 2025', data:ins25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yIns' },
+      { label:'UJP 2026', data:ujp26, borderColor:'#00c49a', backgroundColor:'rgba(0,196,154,.08)', borderWidth:3, pointRadius:4, tension:.3, yAxisID:'yUjp' },
+      { label:'UJP 2025', data:ujp25, borderColor:'#8fe3d1', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yUjp' },
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:true, position:'top', align:'end'},
+        tooltip:{callbacks:{label: ctx => ctx.dataset.label + ': Rp ' + ctx.parsed.y.toFixed(1) + ' Jt'}} },
+      scales:{
+        yIns:{ type:'linear', position:'left', beginAtZero:true, title:{display:true,text:'Insentif (Rp Jt)'}, grid:{color:'#e3e8f2'} },
+        yUjp:{ type:'linear', position:'right', beginAtZero:true, title:{display:true,text:'UJP (Rp Jt)'}, grid:{display:false} },
+        x:{ grid:{display:false} }
+      }
+    }
+  });
+}
+
 function render(){
   renderOverview();
   renderProductivity();
   renderInsentif();
+  renderEfficiency();
   renderTrend();
   renderFleet();
 }
