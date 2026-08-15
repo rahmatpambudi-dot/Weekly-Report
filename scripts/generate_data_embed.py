@@ -99,6 +99,19 @@ def main():
     INSIGHT_DATA = json.loads(extract_const(ins_html, "INSIGHT_DATA"))
     print(f"  INSIGHT_DATA: {len(INSIGHT_DATA)} months")
 
+    # DAILY_INS_DATA: per-day insentif/trip/DO/DP for JBBK/CKP/SDA, used for the adaptive
+    # (daily vs monthly) Trend Insentif chart when a short date range is selected.
+    daily_raw = json.loads(extract_const(ins_html, "DAILY"))
+    DAILY_INS_DATA = []
+    for site in KEEP_INSENTIF_SITES:
+        for date, v in daily_raw.get(site, {}).items():
+            DAILY_INS_DATA.append({
+                "site": site, "date": date, "trips": v["trips"], "do": v["do_"],
+                "dp": v["dp"], "ujp": v["ujp"], "ins": v["ins"], "cbm": v["cbm"],
+            })
+    DAILY_INS_DATA.sort(key=lambda r: (r["site"], r["date"]))
+    print(f"  DAILY_INS_DATA: {len(DAILY_INS_DATA)} rows")
+
     print("Fetching Fleet data...")
     fleet_html = fetch(FLEET_HTML_URL)
     raw = json.loads(extract_const(fleet_html, "RAW"))
@@ -168,6 +181,7 @@ def main():
         "const PROD_DATA = " + json.dumps(PROD_DATA, separators=(', ', ': ')) + ";",
         "const INS_DATA = " + json.dumps(INS_DATA, separators=(', ', ': ')) + ";",
         "const INSIGHT_DATA = " + json.dumps(INSIGHT_DATA, separators=(', ', ': ')) + ";",
+        "const DAILY_INS_DATA = " + json.dumps(DAILY_INS_DATA, separators=(', ', ': ')) + ";",
         "const FLEET_DATA = " + json.dumps(FLEET_DATA, separators=(', ', ': ')) + ";",
         "const FLEET_COST_DATA = " + json.dumps(FLEET_COST_DATA, separators=(', ', ': ')) + ";",
         "const SUPPORT_LK_DATA = " + json.dumps(SUPPORT_LK_DATA, separators=(', ', ': ')) + ";",
