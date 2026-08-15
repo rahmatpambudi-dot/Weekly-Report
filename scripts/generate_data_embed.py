@@ -95,6 +95,10 @@ def main():
         INS_DATA.append(row)
     print(f"  INS_DATA: {len(INS_DATA)} rows (JBBK/CKP/SDA)")
 
+    # INSIGHT_DATA: monthly MoM/YoY efficiency comparison, used by the Efisiensi MoM/YoY section
+    INSIGHT_DATA = json.loads(extract_const(ins_html, "INSIGHT_DATA"))
+    print(f"  INSIGHT_DATA: {len(INSIGHT_DATA)} months")
+
     print("Fetching Fleet data...")
     fleet_html = fetch(FLEET_HTML_URL)
     raw = json.loads(extract_const(fleet_html, "RAW"))
@@ -163,6 +167,7 @@ def main():
     out = [
         "const PROD_DATA = " + json.dumps(PROD_DATA, separators=(', ', ': ')) + ";",
         "const INS_DATA = " + json.dumps(INS_DATA, separators=(', ', ': ')) + ";",
+        "const INSIGHT_DATA = " + json.dumps(INSIGHT_DATA, separators=(', ', ': ')) + ";",
         "const FLEET_DATA = " + json.dumps(FLEET_DATA, separators=(', ', ': ')) + ";",
         "const FLEET_COST_DATA = " + json.dumps(FLEET_COST_DATA, separators=(', ', ': ')) + ";",
         "const SUPPORT_LK_DATA = " + json.dumps(SUPPORT_LK_DATA, separators=(', ', ': ')) + ";",
