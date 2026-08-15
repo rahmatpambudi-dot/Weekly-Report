@@ -298,90 +298,6 @@ function insentifForRange(months){
 
 const SITE_LABEL_INS = {JBBK:'Jababeka', CKP:'Cikupa', SDA:'Sidoarjo'};
 
-function renderInsentif(){
-  const months = monthsOverlapping(state.from, state.to);
-  const drivers = insentifForRange(months);
-  const totalAll = drivers.reduce((a,r)=>a+r.sum,0);
-
-  document.getElementById('insTag').textContent = months.map(m=>MONTH_SHORT[m.slice(5)]).join(', ');
-
-  // site totals
-  const bySite = {};
-  ['JBBK','CKP','SDA'].forEach(s => {
-    const rows = drivers.filter(r=>r.site===s);
-    bySite[s] = {total: rows.reduce((a,r)=>a+r.sum,0), cnt: rows.length};
-  });
-
-  const kpiRow = document.getElementById('insKpiRow');
-  kpiRow.innerHTML = '';
-  ['JBBK','CKP','SDA'].forEach(s => {
-    kpiRow.innerHTML += `<div class="kpi"><div class="lbl">${SITE_LABEL_INS[s]}</div>
-      <div class="val">${fmtRpJt(bySite[s].total)}</div>
-      <div class="sub">${bySite[s].cnt} penerima</div></div>`;
-  });
-  kpiRow.innerHTML += `<div class="kpi" style="background:var(--navy);border-color:var(--navy);">
-      <div class="lbl" style="color:var(--ice);">Total NDC</div>
-      <div class="val" style="color:#fff;">${fmtRpJt(totalAll)}</div>
-      <div class="sub" style="color:var(--ice);">${drivers.length} penerima aktif</div></div>`;
-
-  // top 10 table
-  const top10 = [...drivers].sort((a,b)=>b.sum-a.sum).slice(0,10);
-  const tbody = document.querySelector('#topTable tbody');
-  tbody.innerHTML = '';
-  if(top10.length===0){
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">Tidak ada data pada periode ini</td></tr>';
-  } else {
-    top10.forEach((r,i)=>{
-      tbody.innerHTML += `<tr>
-        <td><span class="rank ${i<3?'top':''}">${i+1}</span></td>
-        <td style="font-weight:${i<3?'700':'500'};">${r.name}</td>
-        <td>${SITE_LABEL_INS[r.site]}</td>
-        <td>${r.role}</td>
-        <td class="mono" style="font-weight:${i<3?'700':'500'};">${fmtNum(r.sum)}</td>
-      </tr>`;
-    });
-  }
-
-  // category distribution: per driver-month value within range
-  let high=0, mid=0, low=0;
-  const fields = months.map(m => MPP_MONTH_FIELD[m]);
-  INS_DATA.forEach(r => {
-    fields.forEach(f => {
-      const v = r[f]||0;
-      if(v<=0) return;
-      if(v>1500000) high++;
-      else if(v>=500000) mid++;
-      else low++;
-    });
-  });
-  const totCat = high+mid+low;
-  const distBox = document.getElementById('distBox');
-  if(totCat===0){
-    distBox.innerHTML = '<div class="empty">Tidak ada data</div>';
-  } else {
-    const rows = [
-      {label:'High (> Rp 1,5 Jt)', n:high, color:'var(--red)'},
-      {label:'Mid (Rp 0,5 – 1,5 Jt)', n:mid, color:'var(--teal)'},
-      {label:'Low (< Rp 0,5 Jt)', n:low, color:'var(--t2)'},
-    ];
-    distBox.innerHTML = rows.map(r => {
-      const pct = (r.n/totCat*100);
-      return `<div class="dist-bar">
-        <div class="db-label"><span>${r.label}</span><span>${pct.toFixed(0)}% (${r.n})</span></div>
-        <div class="db-track"><div class="db-fill" style="width:${Math.max(pct,4)}%;background:${r.color};"></div></div>
-      </div>`;
-    }).join('');
-  }
-
-  // insight text
-  const topSite = Object.entries(bySite).sort((a,b)=>b[1].total-a[1].total)[0];
-  const lowSite = Object.entries(bySite).sort((a,b)=>a[1].total-b[1].total)[0];
-  document.getElementById('insInsight').innerHTML = `<b>Insight:</b><p>
-    ${topSite ? SITE_LABEL_INS[topSite[0]] : '-'} berkontribusi insentif terbesar (${topSite?fmtRpJt(topSite[1].total):'-'}) pada periode ini.
-    ${lowSite ? SITE_LABEL_INS[lowSite[0]] : '-'} memiliki basis penerima paling kecil (${lowSite?lowSite[1].cnt:'-'} orang, ${lowSite?fmtRpJt(lowSite[1].total):'-'}).
-  </p>`;
-}
-
 // ===== Trend chart =====
 let trendChartObj = null;
 function renderTrend(){
@@ -785,7 +701,6 @@ function renderInsUjpTrend(){
 function render(){
   renderOverview();
   renderProductivity();
-  renderInsentif();
   renderEfficiency();
   renderTrend();
   renderFleet();
