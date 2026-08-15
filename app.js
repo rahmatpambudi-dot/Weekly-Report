@@ -298,30 +298,53 @@ function insentifForRange(months){
 
 const SITE_LABEL_INS = {JBBK:'Jababeka', CKP:'Cikupa', SDA:'Sidoarjo'};
 
-// ===== Trend chart =====
+// ===== Trend chart (adaptive: daily when range is short, monthly otherwise) =====
 let trendChartObj = null;
 function renderTrend(){
-  const months = monthsOverlapping(state.from, state.to);
-  const values = months.map(m => {
-    const f = MPP_MONTH_FIELD[m];
-    return INS_DATA.reduce((a,r)=>a+(r[f]||0),0)/1e6;
-  });
-  const labels = months.map(m => MONTH_SHORT[m.slice(5)] + (m==='2026-08' ? '*' : ''));
+  const fromISO = toISO(state.from), toISOs = toISO(state.to);
+  const daySpan = Math.round((state.to - state.from) / 86400000) + 1;
+  const useDaily = daySpan <= 31 && typeof DAILY_INS_DATA !== 'undefined';
+
+  let labels, values, chartLabel;
+
+  if(useDaily){
+    const rows = DAILY_INS_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
+    const byDate = {};
+    rows.forEach(r => { byDate[r.date] = (byDate[r.date]||0) + r.ins; });
+    const dates = Object.keys(byDate).sort();
+    labels = dates.map(d => {
+      const [y,m,day] = d.split('-');
+      return parseInt(day) + ' ' + MONTH_SHORT[m];
+    });
+    values = dates.map(d => byDate[d]/1e6);
+    chartLabel = 'Insentif NDC harian (Rp Jt)';
+  } else {
+    const months = monthsOverlapping(state.from, state.to);
+    values = months.map(m => {
+      const f = MPP_MONTH_FIELD[m];
+      return INS_DATA.reduce((a,r)=>a+(r[f]||0),0)/1e6;
+    });
+    labels = months.map(m => MONTH_SHORT[m.slice(5)] + (m==='2026-08' ? '*' : ''));
+    chartLabel = 'Total Insentif NDC (Rp Jt)';
+  }
 
   const ctx = document.getElementById('trendChart').getContext('2d');
+  document.getElementById('trendNote').textContent = useDaily
+    ? `Total insentif harian NDC (${fromISO} – ${toISOs})`
+    : 'Total insentif bulanan pada periode terpilih';
   if(trendChartObj) trendChartObj.destroy();
   trendChartObj = new Chart(ctx, {
     type:'line',
-    data:{ labels, datasets:[{ label:'Total Insentif NDC (Rp Jt)', data: values,
+    data:{ labels, datasets:[{ label:chartLabel, data: values,
       borderColor:'#1c7293', backgroundColor:'rgba(28,114,147,.08)', fill:true,
-      tension:.3, borderWidth:3, pointRadius:5, pointBackgroundColor:'#1c7293' }] },
+      tension:.3, borderWidth: useDaily?2:3, pointRadius: useDaily?(values.length>20?0:3):5, pointBackgroundColor:'#1c7293' }] },
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:false},
         tooltip:{callbacks:{label: ctx => 'Rp ' + ctx.parsed.y.toFixed(1) + ' Jt'}} },
       scales:{
         y:{ beginAtZero:true, title:{display:true,text:'Rp Juta'}, grid:{color:'#e3e8f2'} },
-        x:{ grid:{display:false} }
+        x:{ grid:{display:false}, ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit: useDaily?10:12 } }
       }
     }
   });
