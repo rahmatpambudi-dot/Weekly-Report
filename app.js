@@ -151,6 +151,9 @@ function renderProductivity(){
   renderProdInsight(cur, prev);
 }
 
+// Target OLF perusahaan
+const OLF_TARGET = 85;
+
 function renderProdInsight(cur, prev){
   const box = document.getElementById('prodInsight');
   const sitesWithData = ROUTE_ORDER.filter(s => cur[s]);
@@ -179,11 +182,14 @@ function renderProdInsight(cur, prev){
     .filter(d => d.delta < -0.1)
     .sort((a,b) => a.delta - b.delta);
 
-  const hasRedFlag = declining.length > 0 || cur[worstOlf].olf < 80;
+  // sites currently below the OLF target — this is what drives the red flag now
+  const belowTarget = sitesWithData.filter(s => cur[s].olf < OLF_TARGET);
+
+  const hasRedFlag = belowTarget.length > 0;
   box.className = 'insight-box' + (hasRedFlag ? ' red' : '');
 
   let items = '';
-  items += `<li>🚚 <b>${SITE_LABEL_PROD[worstOlf]}</b> — OLF terendah di antara 5 jalur (${cur[worstOlf].olf.toFixed(1)}%)${cur[worstOlf].olf<80?', di bawah target 80%':''}.</li>`;
+  items += `<li>🚚 <b>${SITE_LABEL_PROD[worstOlf]}</b> — OLF terendah di antara 5 jalur (${cur[worstOlf].olf.toFixed(1)}%)${cur[worstOlf].olf<OLF_TARGET?', di bawah target '+OLF_TARGET+'%':''}.</li>`;
   if(declining.length){
     declining.slice(0,2).forEach(d => {
       items += `<li>📉 <b>${SITE_LABEL_PROD[d.site]}</b> — OLF turun ${Math.abs(d.delta).toFixed(1)} pt dibanding periode sebelumnya, perlu ditelusuri penyebabnya.</li>`;
@@ -197,8 +203,9 @@ function renderProdInsight(cur, prev){
 
   box.innerHTML = `<b>${hasRedFlag ? '⚠️ Perlu Perhatian:' : 'Insight:'}</b><ul>${items}</ul>`;
 
-  const flaggedSet = new Set([worstOlf, ...declining.map(d=>d.site), ...doDeclining.map(d=>d.site)]);
-  renderNotesGrid(cur, flaggedSet);
+  // Notes/action-plan cards: only show routes currently below the OLF target
+  const flaggedSet = new Set(belowTarget);
+  renderNotesGrid(cur, flaggedSet, belowTarget);
 }
 
 // ===== Manual notes / action plan (persisted in localStorage, per browser) =====
@@ -212,10 +219,19 @@ function saveNote(site, field, val){
   catch(e){ /* storage unavailable (private mode etc) */ }
 }
 
-function renderNotesGrid(cur, flaggedSet){
+function renderNotesGrid(cur, flaggedSet, onlySites){
   const grid = document.getElementById('notesGrid');
   grid.innerHTML = '';
-  ROUTE_ORDER.forEach(site => {
+  // Only render cards for routes under the OLF target. If onlySites isn't passed
+  // (e.g. no data at all), fall back to nothing rather than showing everything.
+  const sitesToShow = onlySites ? ROUTE_ORDER.filter(s => onlySites.includes(s)) : [];
+
+  if(sitesToShow.length === 0){
+    grid.innerHTML = '<div class="empty" style="padding:12px 4px;">🎉 Semua jalur sudah mencapai target OLF ' + OLF_TARGET + '% pada periode ini.</div>';
+    return;
+  }
+
+  sitesToShow.forEach(site => {
     const label = SITE_LABEL_PROD[site];
     const isFlagged = flaggedSet.has(site);
     const olfTxt = cur[site] ? cur[site].olf.toFixed(1)+'%' : '—';
