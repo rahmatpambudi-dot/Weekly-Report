@@ -122,7 +122,7 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
 .note-card .nc-flag.ok{background:var(--gbg);color:var(--green);}
 .note-card label{font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.4px;display:block;margin:8px 0 3px;}
 .note-card label:first-of-type{margin-top:0;}
-.note-card textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;color:var(--text);resize:vertical;min-height:44px;background:#fff;outline:none;}
+.note-card textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;color:var(--text);resize:vertical;min-height:60px;background:#fff;outline:none;overflow:hidden;line-height:1.5;}
 .note-card textarea:focus{border-color:var(--teal);}
 .nc-saved{font-size:10px;color:var(--green);opacity:0;transition:opacity .3s;margin-top:4px;}
 .nc-saved.show{opacity:1;}
@@ -139,6 +139,22 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
 .badge.green{background:var(--gbg);color:var(--green);}
 .badge.red{background:var(--rbg);color:var(--red);}
 .badge.gray{background:var(--bg);color:var(--t2);}
+
+.eff-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+.eff-row:last-child{border-bottom:none;}
+.eff-icon{width:32px;height:32px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.eff-main{flex:1;min-width:0;}
+.eff-label{font-size:12.5px;font-weight:700;color:var(--text);}
+.eff-values{font-size:11px;color:var(--t3);margin-top:2px;}
+.eff-values b{color:var(--t2);font-weight:700;}
+.eff-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.eff-pct{font-size:13px;font-weight:800;min-width:56px;text-align:right;}
+.eff-pct.up{color:var(--green);}
+.eff-pct.down{color:var(--red);}
+.conclusion-box{background:var(--gbg);border:1px solid #bbf0d0;border-radius:var(--r);padding:14px 18px;margin-top:14px;}
+.conclusion-box .cb-title{font-size:13px;font-weight:800;color:var(--green);display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+.conclusion-box ul{margin:0;padding-left:18px;}
+.conclusion-box li{font-size:12px;color:#14532d;line-height:1.7;}
 
 .empty{padding:30px;text-align:center;color:var(--t3);font-size:12.5px;}
 
@@ -190,6 +206,7 @@ body.export-mode .main{margin-left:0;}
     <div class="s-item active" data-scroll="sec-overview"><span class="s-dot"></span>Overview</div>
     <div class="s-item" data-scroll="sec-prod"><span class="s-dot"></span>Productivity per Jalur</div>
     <div class="s-item" data-scroll="sec-ins"><span class="s-dot"></span>Insentif NDC</div>
+    <div class="s-item" data-scroll="sec-eff"><span class="s-dot"></span>Efisiensi MoM/YoY</div>
     <div class="s-item" data-scroll="sec-trend"><span class="s-dot"></span>Trend Insentif</div>
     <div class="s-item" data-scroll="sec-fleet"><span class="s-dot"></span>Support Fleet LK</div>
   </div>
@@ -288,6 +305,33 @@ body.export-mode .main{margin-left:0;}
         </div>
       </div>
       <div class="insight-box blue" id="insInsight"></div>
+    </div>
+
+    <div class="section" id="sec-eff">
+      <div class="sec-head">
+        <div class="sec-title">Efisiensi Operasional — MoM &amp; YoY</div>
+        <div class="sec-note" id="effNote">berdasarkan bulan data terbaru</div>
+      </div>
+      <div class="grid2" id="effCompareGrid" style="grid-template-columns:1fr 1fr;">
+        <div class="panel">
+          <div class="ph"><h3>Perbandingan Efisiensi MoM</h3><span class="tag" id="effMomTag"></span></div>
+          <div class="pb" id="effMomBody"></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><h3>Perbandingan Efisiensi YoY</h3><span class="tag" id="effYoyTag"></span></div>
+          <div class="pb" id="effYoyBody"></div>
+        </div>
+      </div>
+      <div class="grid2" style="grid-template-columns:1fr 1fr;margin-top:16px;">
+        <div class="panel chart-panel">
+          <div class="ph"><h3>DO &amp; Trip Trend — 2026 vs 2025</h3><span class="tag">volume per bulan</span></div>
+          <div class="pb"><div class="chart-wrap"><canvas id="doTripTrendChart"></canvas></div></div>
+        </div>
+        <div class="panel chart-panel">
+          <div class="ph"><h3>Insentif &amp; UJP Trend — 2026 vs 2025</h3><span class="tag">total per bulan</span></div>
+          <div class="pb"><div class="chart-wrap"><canvas id="insUjpTrendChart"></canvas></div></div>
+        </div>
+      </div>
     </div>
 
     <div class="section" id="sec-trend">
