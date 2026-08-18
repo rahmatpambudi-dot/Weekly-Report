@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Monthly Report — Internal NDC & RDC</title>
+<title>Weekly Report — Internal NDC & RDC</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -215,7 +215,7 @@ body.export-mode .main{margin-left:0;}
 <div class="main">
   <div class="topbar">
     <div>
-      <div class="tb-title">Monthly Report — Internal NDC &amp; RDC</div>
+      <div class="tb-title">Weekly Report — Internal NDC &amp; RDC</div>
       <div class="tb-sub">Productivity · Insentif · Fleet Support</div>
     </div>
     <div class="tb-right">
@@ -299,11 +299,11 @@ body.export-mode .main{margin-left:0;}
       </div>
       <div class="grid2" style="grid-template-columns:1fr 1fr;margin-top:16px;">
         <div class="panel chart-panel">
-          <div class="ph"><h3>DO &amp; Trip Trend — 2026 vs 2025</h3><span class="tag">volume per bulan</span></div>
+          <div class="ph"><h3>DO &amp; Trip Trend — 2026 vs 2025</h3><span class="tag" id="doTripTrendTag">volume per bulan</span></div>
           <div class="pb"><div class="chart-wrap"><canvas id="doTripTrendChart"></canvas></div></div>
         </div>
         <div class="panel chart-panel">
-          <div class="ph"><h3>Insentif &amp; UJP Trend — 2026 vs 2025</h3><span class="tag">total per bulan</span></div>
+          <div class="ph"><h3>Insentif &amp; UJP Trend — 2026 vs 2025</h3><span class="tag" id="insUjpTrendTag">total per bulan</span></div>
           <div class="pb"><div class="chart-wrap"><canvas id="insUjpTrendChart"></canvas></div></div>
         </div>
       </div>
