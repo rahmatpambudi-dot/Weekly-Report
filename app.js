@@ -313,7 +313,7 @@ function renderTrend(){
   const daySpan = Math.round((state.to - state.from) / 86400000) + 1;
   const useDaily = daySpan <= 31 && typeof DAILY_INS_DATA !== 'undefined';
 
-  let labels, values, chartLabel;
+  let labels, values, chartLabel, prevValues=null, prevLabel=null;
 
   if(useDaily){
     const rows = DAILY_INS_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
@@ -325,7 +325,19 @@ function renderTrend(){
       return parseInt(day) + ' ' + MONTH_SHORT[m];
     });
     values = dates.map(d => byDate[d]/1e6);
-    chartLabel = 'Insentif NDC harian (Rp Jt)';
+    chartLabel = 'Insentif ' + (dates.length ? MONTH_SHORT[dates[0].split('-')[1]] : 'bulan ini') + ' 2026';
+
+    // Comparison: same day-range, previous calendar month
+    const [pf, pt] = prevPeriod(state.from, state.to);
+    const pfISO = toISO(pf), ptISO = toISO(pt);
+    const prevRows = DAILY_INS_DATA.filter(r => r.date >= pfISO && r.date <= ptISO);
+    const byPrevDate = {};
+    prevRows.forEach(r => { byPrevDate[r.date] = (byPrevDate[r.date]||0) + r.ins; });
+    const prevDates = Object.keys(byPrevDate).sort();
+    if(prevDates.length){
+      prevValues = labels.map((_, i) => prevDates[i]!==undefined ? byPrevDate[prevDates[i]]/1e6 : null);
+      prevLabel = 'Insentif ' + MONTH_SHORT[prevDates[0].split('-')[1]] + ' 2026 (bulan lalu)';
+    }
   } else {
     const months = monthsOverlapping(state.from, state.to);
     values = months.map(m => {
@@ -341,15 +353,23 @@ function renderTrend(){
     ? `Total insentif harian NDC (${fromISO} – ${toISOs})`
     : 'Total insentif bulanan pada periode terpilih';
   if(trendChartObj) trendChartObj.destroy();
+
+  const datasets = [{ label:chartLabel, data: values,
+    borderColor:'#1c7293', backgroundColor:'rgba(28,114,147,.08)', fill:true,
+    tension:.3, borderWidth: useDaily?2:3, pointRadius: useDaily?(values.length>20?0:3):5, pointBackgroundColor:'#1c7293' }];
+  if(prevValues){
+    datasets.push({ label:prevLabel, data: prevValues,
+      borderColor:'#94a1c2', borderDash:[5,4], fill:false,
+      tension:.3, borderWidth:2, pointRadius: prevValues.length>20?0:3, pointBackgroundColor:'#94a1c2' });
+  }
+
   trendChartObj = new Chart(ctx, {
     type:'line',
-    data:{ labels, datasets:[{ label:chartLabel, data: values,
-      borderColor:'#1c7293', backgroundColor:'rgba(28,114,147,.08)', fill:true,
-      tension:.3, borderWidth: useDaily?2:3, pointRadius: useDaily?(values.length>20?0:3):5, pointBackgroundColor:'#1c7293' }] },
+    data:{ labels, datasets },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false},
-        tooltip:{callbacks:{label: ctx => 'Rp ' + ctx.parsed.y.toFixed(1) + ' Jt'}} },
+      plugins:{ legend:{display: !!prevValues, position:'top', align:'end'},
+        tooltip:{callbacks:{label: ctx => ctx.dataset.label + ': Rp ' + ctx.parsed.y.toFixed(1) + ' Jt'}} },
       scales:{
         y:{ beginAtZero:true, title:{display:true,text:'Rp Juta'}, grid:{color:'#e3e8f2'} },
         x:{ grid:{display:false}, ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit: useDaily?10:12 } }
@@ -414,7 +434,8 @@ function renderFleet(){
       const pv = prevBySite[s] ? prevBySite[s].trips : 0;
       const delta = v.trips - pv;
       const deltaCls = delta >= 0 ? 'green' : 'red';
-      const deltaStr = (delta >= 0 ? '+' : '') + delta;
+      const pct = pv > 0 ? (delta / pv * 100) : (v.trips > 0 ? 100 : 0);
+      const deltaStr = (delta >= 0 ? '▲ +' : '▼ ') + Math.abs(pct).toFixed(1) + '%';
       tbody.innerHTML += `<tr><td style="font-weight:700;">${s}</td>
         <td class="mono">${fmtNum(v.trips)}</td>
         <td class="mono">${fmtNum(v.cbm)}</td>
