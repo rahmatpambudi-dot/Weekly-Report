@@ -157,7 +157,9 @@ def main():
     ext_jalur = json.loads(extract_const(fleet_html, "EXT_JALUR"))
 
     def scope_sites_for_area(area):
-        return [site for site, areas in SAVING_SCOPE.items() if area in areas]
+        # Retail-only, matching the SILK dashboard's default "Retail" segment
+        # (siteSegment(): every site is Retail except 'IND Jababeka', which is Industrial).
+        return [site for site, areas in SAVING_SCOPE.items() if area in areas and site != 'IND Jababeka']
 
     area_contrib = []
     for area in SCOPE_AREAS:
