@@ -21,11 +21,19 @@ function monthsOverlapping(fromDate, toDate){
   });
 }
 
+// Compares against the SAME day-of-month range in the previous calendar month
+// (e.g. 1-14 Aug -> 1-14 Jul), not just "N days before". Clamps to the previous
+// month's last day when the current month has more days (e.g. 31 Aug -> 30 Apr... etc).
 function prevPeriod(fromDate, toDate){
-  const days = Math.round((toDate - fromDate)/86400000) + 1;
-  const prevTo = new Date(fromDate.getTime() - 86400000);
-  const prevFrom = new Date(prevTo.getTime() - (days-1)*86400000);
-  return [prevFrom, prevTo];
+  function subMonth(d){
+    const y = d.getUTCFullYear(), m = d.getUTCMonth(), day = d.getUTCDate();
+    let newMonth = m - 1, newYear = y;
+    if(newMonth < 0){ newMonth = 11; newYear -= 1; }
+    const daysInNewMonth = new Date(Date.UTC(newYear, newMonth+1, 0)).getUTCDate();
+    const newDay = Math.min(day, daysInNewMonth);
+    return new Date(Date.UTC(newYear, newMonth, newDay));
+  }
+  return [subMonth(fromDate), subMonth(toDate)];
 }
 
 // ===== Global state =====
@@ -101,7 +109,7 @@ function combinedProdAvg(months){
 function renderProductivity(){
   const months = monthsOverlapping(state.from, state.to);
   const [pf, pt] = prevPeriod(state.from, state.to);
-  const prevMonths = monthsOverlapping(pf, pt).filter(m => !months.includes(m));
+  const prevMonths = monthsOverlapping(pf, pt);
   const cur = avgProdForRange(months);
   const prev = avgProdForRange(prevMonths.length ? prevMonths : months);
 
@@ -660,30 +668,55 @@ function renderEfficiency(){
 
 let doTripTrendChartObj = null;
 function renderDoTripTrend(){
-  const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
-  const labels = months.map(m => MONTH_SHORT_EN[m]);
-  const do26 = months.map(m => INSIGHT_DATA[m].cur26.DO);
-  const do25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.DO : null);
-  const trip26 = months.map(m => INSIGHT_DATA[m].cur26.Trip);
-  const trip25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.Trip : null);
+  const fromISO = toISO(state.from), toISOs = toISO(state.to);
+  const daySpan = Math.round((state.to - state.from) / 86400000) + 1;
+  const useDaily = daySpan <= 31 && typeof DAILY_INS_DATA !== 'undefined';
+  document.getElementById('doTripTrendTag').textContent = useDaily ? 'volume harian (2026)' : 'volume per bulan';
+
+  let labels, do26, do25, trip26, trip25, showPrevYear;
+
+  if(useDaily){
+    const rows = DAILY_INS_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
+    const byDate = {};
+    rows.forEach(r => {
+      if(!byDate[r.date]) byDate[r.date] = {do:0, trips:0};
+      byDate[r.date].do += r.do;
+      byDate[r.date].trips += r.trips;
+    });
+    const dates = Object.keys(byDate).sort();
+    labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
+    do26 = dates.map(d => byDate[d].do);
+    trip26 = dates.map(d => byDate[d].trips);
+    do25 = null; trip25 = null; showPrevYear = false;
+  } else {
+    const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
+    labels = months.map(m => MONTH_SHORT_EN[m]);
+    do26 = months.map(m => INSIGHT_DATA[m].cur26.DO);
+    do25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.DO : null);
+    trip26 = months.map(m => INSIGHT_DATA[m].cur26.Trip);
+    trip25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.Trip : null);
+    showPrevYear = true;
+  }
+
+  const datasets = [
+    { label:'DO 2026', data:do26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(do26.length>20?0:3):4, tension:.3, yAxisID:'yDo' },
+  ];
+  if(showPrevYear) datasets.push({ label:'DO 2025', data:do25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yDo' });
+  datasets.push({ label:'Trip 2026', data:trip26, borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(trip26.length>20?0:3):4, tension:.3, yAxisID:'yTrip' });
+  if(showPrevYear) datasets.push({ label:'Trip 2025', data:trip25, borderColor:'#f7d38a', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yTrip' });
 
   const ctx = document.getElementById('doTripTrendChart').getContext('2d');
   if(doTripTrendChartObj) doTripTrendChartObj.destroy();
   doTripTrendChartObj = new Chart(ctx, {
     type: 'line',
-    data: { labels, datasets: [
-      { label:'DO 2026', data:do26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:3, pointRadius:4, tension:.3, yAxisID:'yDo' },
-      { label:'DO 2025', data:do25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yDo' },
-      { label:'Trip 2026', data:trip26, borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,.08)', borderWidth:3, pointRadius:4, tension:.3, yAxisID:'yTrip' },
-      { label:'Trip 2025', data:trip25, borderColor:'#f7d38a', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yTrip' },
-    ]},
+    data: { labels, datasets },
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:true, position:'top', align:'end'} },
       scales:{
         yDo:{ type:'linear', position:'left', beginAtZero:true, title:{display:true,text:'DO'}, grid:{color:'#e3e8f2'} },
         yTrip:{ type:'linear', position:'right', beginAtZero:true, title:{display:true,text:'Trip'}, grid:{display:false} },
-        x:{ grid:{display:false} }
+        x:{ grid:{display:false}, ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit: useDaily?10:12 } }
       }
     }
   });
@@ -691,23 +724,48 @@ function renderDoTripTrend(){
 
 let insUjpTrendChartObj = null;
 function renderInsUjpTrend(){
-  const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
-  const labels = months.map(m => MONTH_SHORT_EN[m]);
-  const ins26 = months.map(m => INSIGHT_DATA[m].cur26.Insentif/1e6);
-  const ins25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.Insentif/1e6 : null);
-  const ujp26 = months.map(m => INSIGHT_DATA[m].cur26.UJP/1e6);
-  const ujp25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.UJP/1e6 : null);
+  const fromISO = toISO(state.from), toISOs = toISO(state.to);
+  const daySpan = Math.round((state.to - state.from) / 86400000) + 1;
+  const useDaily = daySpan <= 31 && typeof DAILY_INS_DATA !== 'undefined';
+  document.getElementById('insUjpTrendTag').textContent = useDaily ? 'total harian (2026)' : 'total per bulan';
+
+  let labels, ins26, ins25, ujp26, ujp25, showPrevYear;
+
+  if(useDaily){
+    const rows = DAILY_INS_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
+    const byDate = {};
+    rows.forEach(r => {
+      if(!byDate[r.date]) byDate[r.date] = {ins:0, ujp:0};
+      byDate[r.date].ins += r.ins;
+      byDate[r.date].ujp += r.ujp;
+    });
+    const dates = Object.keys(byDate).sort();
+    labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
+    ins26 = dates.map(d => byDate[d].ins/1e6);
+    ujp26 = dates.map(d => byDate[d].ujp/1e6);
+    ins25 = null; ujp25 = null; showPrevYear = false;
+  } else {
+    const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
+    labels = months.map(m => MONTH_SHORT_EN[m]);
+    ins26 = months.map(m => INSIGHT_DATA[m].cur26.Insentif/1e6);
+    ins25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.Insentif/1e6 : null);
+    ujp26 = months.map(m => INSIGHT_DATA[m].cur26.UJP/1e6);
+    ujp25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.UJP/1e6 : null);
+    showPrevYear = true;
+  }
+
+  const datasets = [
+    { label:'Insentif 2026', data:ins26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(ins26.length>20?0:3):4, tension:.3, yAxisID:'yIns' },
+  ];
+  if(showPrevYear) datasets.push({ label:'Insentif 2025', data:ins25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yIns' });
+  datasets.push({ label:'UJP 2026', data:ujp26, borderColor:'#00c49a', backgroundColor:'rgba(0,196,154,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(ujp26.length>20?0:3):4, tension:.3, yAxisID:'yUjp' });
+  if(showPrevYear) datasets.push({ label:'UJP 2025', data:ujp25, borderColor:'#8fe3d1', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yUjp' });
 
   const ctx = document.getElementById('insUjpTrendChart').getContext('2d');
   if(insUjpTrendChartObj) insUjpTrendChartObj.destroy();
   insUjpTrendChartObj = new Chart(ctx, {
     type: 'line',
-    data: { labels, datasets: [
-      { label:'Insentif 2026', data:ins26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:3, pointRadius:4, tension:.3, yAxisID:'yIns' },
-      { label:'Insentif 2025', data:ins25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yIns' },
-      { label:'UJP 2026', data:ujp26, borderColor:'#00c49a', backgroundColor:'rgba(0,196,154,.08)', borderWidth:3, pointRadius:4, tension:.3, yAxisID:'yUjp' },
-      { label:'UJP 2025', data:ujp25, borderColor:'#8fe3d1', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yUjp' },
-    ]},
+    data: { labels, datasets },
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:true, position:'top', align:'end'},
@@ -715,7 +773,7 @@ function renderInsUjpTrend(){
       scales:{
         yIns:{ type:'linear', position:'left', beginAtZero:true, title:{display:true,text:'Insentif (Rp Jt)'}, grid:{color:'#e3e8f2'} },
         yUjp:{ type:'linear', position:'right', beginAtZero:true, title:{display:true,text:'UJP (Rp Jt)'}, grid:{display:false} },
-        x:{ grid:{display:false} }
+        x:{ grid:{display:false}, ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit: useDaily?10:12 } }
       }
     }
   });
