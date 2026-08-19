@@ -152,24 +152,37 @@ def main():
     data2025 = [m2025.get(f"2025-{m[5:7]}", 0) for m in months_2026]
 
     # ---- area_contrib: internal vs external per area, scoped per site (matches dashboard's own logic) ----
-    SAVING_SCOPE = extract_js_object_literal(extract_const(fleet_html, "SAVING_SCOPE"))
+    # NOTE: pinned to a fixed date window (AREA_CONTRIB_DATE_FROM..TO) so it matches the SILK
+    # dashboard's "Kontribusi Internal per Area" snapshot exactly. SILK computes this section using
+    # whatever date filter is active on its page, not a full-year cumulative — so to stay in sync this
+    # is pinned rather than rolling. Update these two dates manually if the SILK comparison window moves.
+    AREA_CONTRIB_DATE_FROM = "2026-08-01"
+    AREA_CONTRIB_DATE_TO = "2026-08-14"
+
     ext_agg = json.loads(extract_const(fleet_html, "EXT_AGG"))
     ext_jalur = json.loads(extract_const(fleet_html, "EXT_JALUR"))
+    ALL_FLEET_SITES = ['AHI Jababeka', 'HCI Jababeka', 'HCI Cikupa', 'Corp Sidoarjo',
+                        'IND Jababeka', 'Corp Tamora', 'Corp Tallo']
+
+    def in_window(date_str):
+        return AREA_CONTRIB_DATE_FROM <= date_str <= AREA_CONTRIB_DATE_TO
 
     def scope_sites_for_area(area):
-        # Retail-only, matching the SILK dashboard's default "Retail" segment
-        # (siteSegment(): every site is Retail except 'IND Jababeka', which is Industrial).
-        return [site for site, areas in SAVING_SCOPE.items() if area in areas and site != 'IND Jababeka']
+        # SILK's scopeSitesForArea() no longer gates by SAVING_SCOPE (see its own comment:
+        # "nggak di-gate ke SAVING_SCOPE lagi") — it uses ALL_SITES regardless of area, and lets the
+        # row/entry's own area/jalur field do the area filtering. We mirror that here, keeping only
+        # the Retail-segment filter (exclude 'IND Jababeka').
+        return [site for site in ALL_FLEET_SITES if site != 'IND Jababeka']
 
     area_contrib = []
     for area in SCOPE_AREAS:
         sites = scope_sites_for_area(area)
         if area == 'Lampung':
-            internal = sum(1 for r in raw if r[0] in sites and r[2] == 'Lampung')
-            external = sum(e['trips'] for e in ext_jalur if e['site'] in sites and e.get('jalur') == 'Lampung')
+            internal = sum(1 for r in raw if r[0] in sites and r[2] == 'Lampung' and in_window(r[7]))
+            external = sum(e['trips'] for e in ext_jalur if e['site'] in sites and e.get('jalur') == 'Lampung' and in_window(e.get('date', '')))
         else:
-            internal = sum(1 for r in raw if r[0] in sites and r[1] == area)
-            external = sum(e['trips'] for e in ext_agg if e['site'] in sites and e.get('area') == area)
+            internal = sum(1 for r in raw if r[0] in sites and r[1] == area and in_window(r[7]))
+            external = sum(e['trips'] for e in ext_agg if e['site'] in sites and e.get('area') == area and in_window(e.get('date', '')))
         area_contrib.append({"area": area, "internal": internal, "external": external})
 
     SUPPORT_LK_DATA = {
