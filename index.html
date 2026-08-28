@@ -81,6 +81,10 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 .rm .rd.down{color:var(--red);}
 .rm .rd.flat{color:var(--t3);}
 .rm .rd.gray{color:var(--t3);}
+.kpi-badge-sm{display:block;font-size:9px;font-weight:700;padding:1px 0 0 0;margin-top:2px;letter-spacing:.1px;white-space:nowrap;line-height:1.3;}
+.kpi-badge-sm.hit{color:var(--green);}
+.kpi-badge-sm.warn{color:#b06000;}
+.kpi-badge-sm.miss{color:var(--red);}
 
 /* Panels */
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;}
@@ -300,11 +304,11 @@ body.export-mode .main{margin-left:0;}
       </div>
       <div class="grid2" style="grid-template-columns:1fr 1fr;margin-top:16px;">
         <div class="panel chart-panel">
-          <div class="ph"><h3>DO &amp; Trip Trend — 2026 vs 2025</h3><span class="tag" id="doTripTrendTag">volume per bulan</span></div>
+          <div class="ph"><h3>DO &amp; Trip Trend — MoM</h3><span class="tag" id="doTripTrendTag">volume per bulan</span></div>
           <div class="pb"><div class="chart-wrap"><canvas id="doTripTrendChart"></canvas></div></div>
         </div>
         <div class="panel chart-panel">
-          <div class="ph"><h3>Insentif &amp; UJP Trend — 2026 vs 2025</h3><span class="tag" id="insUjpTrendTag">total per bulan</span></div>
+          <div class="ph"><h3>Insentif &amp; UJP Trend — MoM</h3><span class="tag" id="insUjpTrendTag">total per bulan</span></div>
           <div class="pb"><div class="chart-wrap"><canvas id="insUjpTrendChart"></canvas></div></div>
         </div>
       </div>
