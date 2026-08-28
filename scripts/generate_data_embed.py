@@ -16,6 +16,13 @@ from collections import defaultdict
 PROD_JSON_URL = "https://raw.githubusercontent.com/rahmatpambudi-dot/Productivity/main/data_monthly.json"
 INSENTIF_HTML_URL = "https://raw.githubusercontent.com/rahmatpambudi-dot/Insentif/main/dashboard_insentif_2026.html"
 FLEET_HTML_URL = "https://raw.githubusercontent.com/heylilyloops/lk-internal-fleet-dashboard/main/index.html"
+PROD_RAW_SITE_URLS = {
+    "JABABEKA": "https://raw.githubusercontent.com/rahmatpambudi-dot/Productivity/main/data_JABABEKA.json",
+    "CIKUPA":   "https://raw.githubusercontent.com/rahmatpambudi-dot/Productivity/main/data_CIKUPA.json",
+    "SDA":      "https://raw.githubusercontent.com/rahmatpambudi-dot/Productivity/main/data_SDA.json",
+    "TALLO":    "https://raw.githubusercontent.com/rahmatpambudi-dot/Productivity/main/data_TALLO.json",
+    "TAMORA":   "https://raw.githubusercontent.com/rahmatpambudi-dot/Productivity/main/data_TAMORA.json",
+}
 
 KEEP_INSENTIF_SITES = {"JBBK", "CKP", "SDA"}
 MONTH_SHORT_ID = {'01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr', '05': 'Mei', '06': 'Jun',
@@ -75,11 +82,67 @@ def extract_js_object_literal(raw):
     return json.loads(fixed)
 
 
+def safe_float(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def main():
     print("Fetching Productivity data...")
     prod = json.loads(fetch(PROD_JSON_URL))
     PROD_DATA = {"timestamp": prod["timestamp"], "monthly": prod["monthly"]}
     print(f"  PROD_DATA: {PROD_DATA['timestamp']}, {len(PROD_DATA['monthly'])} rows")
+
+    # ---- per-jalur breakdown by delivery type (td): Demand DO Customer, Store CBM,
+    # Trip Customer/Store/Satelite/Hub. Pulled from the per-site raw trip-level JSON
+    # files (data_<SITE>.json), not the pre-aggregated data_monthly.json, since only
+    # the raw files carry the per-trip 'td' (delivery type) classification.
+    # NOTE: "Demand DO Customer" combines td 'customer' + 'customer via hub' (per
+    # user confirmation). The 4 Trip-count metrics use a straight 1:1 td match
+    # (Trip Hub = td=='hub' only, does NOT include 'customer via hub').
+    print("Fetching Productivity per-site raw data (for Demand/Trip breakdown)...")
+    td_agg = defaultdict(lambda: {"doCustomer": 0.0, "storeCbm": 0.0, "tripCustomer": 0,
+                                   "tripStore": 0, "tripSatelite": 0, "tripHub": 0})
+    for site_key, url in PROD_RAW_SITE_URLS.items():
+        site_raw = json.loads(fetch(url))
+        site_map = site_raw["maps"]["site"]
+        td_map = site_raw["maps"]["td"]
+        for r in site_raw["rows"]:
+            site_name = site_map[r["site"]]
+            month = r["date"][:7]
+            td = td_map[r["td"]]
+            key = (site_name, month)
+            if td in ("customer", "customer via hub"):
+                td_agg[key]["doCustomer"] += safe_float(r["do"])
+            if td == "store":
+                td_agg[key]["storeCbm"] += safe_float(r["cbm"])
+                td_agg[key]["tripStore"] += 1
+            if td == "customer":
+                td_agg[key]["tripCustomer"] += 1
+            if td == "satelite":
+                td_agg[key]["tripSatelite"] += 1
+            if td == "hub":
+                td_agg[key]["tripHub"] += 1
+        print(f"  {site_key}: {len(site_raw['rows'])} raw rows")
+
+    merged = 0
+    for row in PROD_DATA["monthly"]:
+        key = (row["site"], row["month"])
+        extra = td_agg.get(key)
+        if extra:
+            row["doCustomer"] = round(extra["doCustomer"])
+            row["storeCbm"] = round(extra["storeCbm"], 1)
+            row["tripCustomer"] = extra["tripCustomer"]
+            row["tripStore"] = extra["tripStore"]
+            row["tripSatelite"] = extra["tripSatelite"]
+            row["tripHub"] = extra["tripHub"]
+            merged += 1
+        else:
+            row["doCustomer"] = row["storeCbm"] = 0
+            row["tripCustomer"] = row["tripStore"] = row["tripSatelite"] = row["tripHub"] = 0
+    print(f"  merged Demand/Trip breakdown into {merged}/{len(PROD_DATA['monthly'])} monthly rows")
 
     print("Fetching Insentif data...")
     ins_html = fetch(INSENTIF_HTML_URL)
@@ -116,6 +179,11 @@ def main():
     fleet_html = fetch(FLEET_HTML_URL)
     raw = json.loads(extract_const(fleet_html, "RAW"))
     # RAW columns: [site,area,jalur,ci,ce,armada,del_type,del_date,do,cbm,lt_ow,ujp,mpp,sewa,kap,owner]
+    # RAW = trips fulfilled by internal (company-owned) fleet.
+    ext_agg = json.loads(extract_const(fleet_html, "EXT_AGG"))
+    ext_jalur = json.loads(extract_const(fleet_html, "EXT_JALUR"))
+    # EXT_AGG = trips fulfilled by external (rented) fleet, already aggregated per site/date/area.
+
     fleet_agg = defaultdict(lambda: [0, 0.0])
     cost_agg = defaultdict(lambda: [0, 0.0, 0.0])
     for r in raw:
@@ -138,6 +206,20 @@ def main():
     )
     print(f"  FLEET_DATA: {len(FLEET_DATA)} rows, up to {max(r['date'] for r in FLEET_DATA)}")
 
+    # EXT_FLEET_DATA: external-fleet trips per site/date, summed across ALL destination areas
+    # (no area filter needed here since this is a per-site total, not per-area like area_contrib).
+    ext_fleet_agg = defaultdict(lambda: [0, 0.0])
+    for e in ext_agg:
+        key = (e['site'], e['date'])
+        ext_fleet_agg[key][0] += e.get('trips', 0) or 0
+        ext_fleet_agg[key][1] += e.get('cbm', 0) or 0
+
+    EXT_FLEET_DATA = sorted(
+        [{"site": k[0], "date": k[1], "trips": v[0], "cbm": round(v[1], 1)} for k, v in ext_fleet_agg.items()],
+        key=lambda x: (x["site"], x["date"])
+    )
+    print(f"  EXT_FLEET_DATA: {len(EXT_FLEET_DATA)} rows")
+
     # ---- trend: 2025 vs 2026 monthly trip totals ----
     trip2025 = json.loads(extract_const(fleet_html, "TRIP2025"))
     m2025 = defaultdict(int)
@@ -159,8 +241,6 @@ def main():
     AREA_CONTRIB_DATE_FROM = "2026-08-01"
     AREA_CONTRIB_DATE_TO = "2026-08-14"
 
-    ext_agg = json.loads(extract_const(fleet_html, "EXT_AGG"))
-    ext_jalur = json.loads(extract_const(fleet_html, "EXT_JALUR"))
     ALL_FLEET_SITES = ['AHI Jababeka', 'HCI Jababeka', 'HCI Cikupa', 'Corp Sidoarjo',
                         'IND Jababeka', 'Corp Tamora', 'Corp Tallo']
 
@@ -198,6 +278,7 @@ def main():
         "const INSIGHT_DATA = " + json.dumps(INSIGHT_DATA, separators=(', ', ': ')) + ";",
         "const DAILY_INS_DATA = " + json.dumps(DAILY_INS_DATA, separators=(', ', ': ')) + ";",
         "const FLEET_DATA = " + json.dumps(FLEET_DATA, separators=(', ', ': ')) + ";",
+        "const EXT_FLEET_DATA = " + json.dumps(EXT_FLEET_DATA, separators=(', ', ': ')) + ";",
         "const FLEET_COST_DATA = " + json.dumps(FLEET_COST_DATA, separators=(', ', ': ')) + ";",
         "const SUPPORT_LK_DATA = " + json.dumps(SUPPORT_LK_DATA, separators=(', ', ': ')) + ";",
     ]
