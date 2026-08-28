@@ -478,7 +478,7 @@ function renderFleet(){
     return totB - totA;
   });
   if(sites.length===0){
-    tbody.innerHTML = '<tr><td colspan="7" class="empty">Tidak ada data pada periode ini</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Tidak ada data pada periode ini</td></tr>';
   } else {
     sites.forEach(s => {
       const v = bySite[s] || {trips:0, cbm:0};
@@ -492,6 +492,7 @@ function renderFleet(){
       const pctInt = totalTripSite ? (v.trips/totalTripSite*100) : 0;
       const pctExt = totalTripSite ? (ev.trips/totalTripSite*100) : 0;
       tbody.innerHTML += `<tr><td style="font-weight:700;">${s}</td>
+        <td class="mono" style="font-weight:700;">${fmtNum(totalTripSite)}</td>
         <td class="mono">${fmtNum(v.trips)}</td>
         <td class="mono">${fmtNum(ev.trips)}</td>
         <td class="mono" style="color:var(--t3);">${pctInt.toFixed(0)}% / ${pctExt.toFixed(0)}%</td>
