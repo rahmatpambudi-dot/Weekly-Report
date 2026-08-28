@@ -8,6 +8,7 @@ const MPP_MONTH_FIELD = {'2026-01':'jan','2026-02':'feb','2026-03':'mar','2026-0
 const fmtRp = v => 'Rp ' + Math.round(v).toLocaleString('id-ID');
 const fmtRpJt = v => 'Rp ' + (v/1e6).toFixed(1) + ' Jt';
 const fmtNum = (v,d=0) => v.toLocaleString('id-ID',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pctChange = (cur, prev) => prev ? (cur-prev)/prev*100 : (cur ? 100 : 0);
 const pad2 = n => String(n).padStart(2,'0');
 const toISO = d => d.toISOString().slice(0,10);
 
@@ -83,13 +84,20 @@ document.querySelectorAll('.s-item').forEach(item => {
 
 // ===== Productivity aggregation =====
 function avgProdForRange(months){
-  // returns {SITE: {olf,ritase,doTrip,tatDirect}} averaged across given month keys
+  // returns {SITE: {olf,ritase,doTrip,tatDirect,...}} — rate-type metrics (olf/ritase/doTrip/
+  // tatDirect/dpReg) are averaged across the given months; the Demand/Trip breakdown metrics
+  // are volume totals, so they're SUMMED across months instead.
   const out = {};
   ROUTE_ORDER.forEach(site => {
     const rows = PROD_DATA.monthly.filter(r => r.site===site && months.includes(r.month));
     if(rows.length===0){ out[site]=null; return; }
     const avg = k => rows.reduce((a,r)=>a+r[k],0)/rows.length;
-    out[site] = { olf: avg('olf')*100, ritase: avg('ritase'), doTrip: avg('doTrip'), tatDirect: avg('tatDirect'), dpReg: avg('dpReg') };
+    const sum = k => rows.reduce((a,r)=>a+(r[k]||0),0);
+    out[site] = {
+      olf: avg('olf')*100, ritase: avg('ritase'), doTrip: avg('doTrip'), tatDirect: avg('tatDirect'), dpReg: avg('dpReg'),
+      doCustomer: sum('doCustomer'), storeCbm: sum('storeCbm'), tripCustomer: sum('tripCustomer'),
+      tripStore: sum('tripStore'), tripSatelite: sum('tripSatelite'), tripHub: sum('tripHub'),
+    };
   });
   return out;
 }
@@ -143,11 +151,24 @@ function renderProductivity(){
       {label:'Ritase', val:d.ritase.toFixed(2), delta: p? d.ritase-p.ritase : null, betterUp:true, suffix:''},
       {label:'DO / Trip', val:d.doTrip.toFixed(1), delta: p? d.doTrip-p.doTrip : null, betterUp:true, suffix:''},
       {label:'TAT Direct (jam)', val:d.tatDirect.toFixed(1)+'j', delta: p? d.tatDirect-p.tatDirect : null, betterUp:false, suffix:'j'},
+      {label:'Demand DO Customer', val:fmtNum(d.doCustomer), pctDelta: p? pctChange(d.doCustomer,p.doCustomer) : null, neutral:true},
+      {label:'Store CBM', val:fmtNum(d.storeCbm,1)+' m³', pctDelta: p? pctChange(d.storeCbm,p.storeCbm) : null, neutral:true},
+      {label:'Trip Customer', val:fmtNum(d.tripCustomer), pctDelta: p? pctChange(d.tripCustomer,p.tripCustomer) : null, neutral:true},
+      {label:'Trip Store', val:fmtNum(d.tripStore), pctDelta: p? pctChange(d.tripStore,p.tripStore) : null, neutral:true},
+      {label:'Trip Satelite', val:fmtNum(d.tripSatelite), pctDelta: p? pctChange(d.tripSatelite,p.tripSatelite) : null, neutral:true},
+      {label:'Trip Hub', val:fmtNum(d.tripHub), pctDelta: p? pctChange(d.tripHub,p.tripHub) : null, neutral:true},
     ];
     let body = '';
     metrics.forEach(m => {
       let deltaHtml = '';
-      if(m.delta!==null && !isNaN(m.delta)){
+      if(m.neutral){
+        if(m.pctDelta!==null && m.pctDelta!==undefined && !isNaN(m.pctDelta)){
+          const isUp = m.pctDelta >= 0;
+          const cls = Math.abs(m.pctDelta) < 0.05 ? 'flat' : 'gray';
+          const arrow = Math.abs(m.pctDelta) < 0.05 ? '' : (isUp ? '▲ ' : '▼ ');
+          deltaHtml = `<div class="rd ${cls}">${arrow}${Math.abs(m.pctDelta).toFixed(1)}% vs periode lalu</div>`;
+        }
+      } else if(m.delta!==null && !isNaN(m.delta)){
         const isUp = m.delta >= 0;
         const good = m.betterUp ? isUp : !isUp;
         const cls = Math.abs(m.delta) < 0.005 ? 'flat' : (good ? 'up' : 'down');
@@ -423,21 +444,35 @@ function renderFleet(){
   document.getElementById('fleetKpiCbm').textContent = fmtNum(totalCbm) + ' CBM';
   document.getElementById('fleetKpiCbmSub').textContent = totalTrips ? ('Rata-rata ' + (totalCbm/totalTrips).toFixed(1) + ' CBM/trip') : '—';
 
+  const extRows = EXT_FLEET_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
+  const extBySite = sumFleetBySite(extRows);
+
   const tbody = document.querySelector('#fleetTable tbody');
   tbody.innerHTML = '';
-  const sites = Object.keys(bySite).sort((a,b)=>bySite[b].trips-bySite[a].trips);
+  const allSites = new Set([...Object.keys(bySite), ...Object.keys(extBySite)]);
+  const sites = [...allSites].sort((a,b) => {
+    const totA = (bySite[a]?.trips||0) + (extBySite[a]?.trips||0);
+    const totB = (bySite[b]?.trips||0) + (extBySite[b]?.trips||0);
+    return totB - totA;
+  });
   if(sites.length===0){
-    tbody.innerHTML = '<tr><td colspan="5" class="empty">Tidak ada data pada periode ini</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">Tidak ada data pada periode ini</td></tr>';
   } else {
     sites.forEach(s => {
-      const v = bySite[s];
+      const v = bySite[s] || {trips:0, cbm:0};
+      const ev = extBySite[s] || {trips:0, cbm:0};
       const pv = prevBySite[s] ? prevBySite[s].trips : 0;
       const delta = v.trips - pv;
       const deltaCls = delta >= 0 ? 'green' : 'red';
       const pct = pv > 0 ? (delta / pv * 100) : (v.trips > 0 ? 100 : 0);
       const deltaStr = (delta >= 0 ? '▲ +' : '▼ ') + Math.abs(pct).toFixed(1) + '%';
+      const totalTripSite = v.trips + ev.trips;
+      const pctInt = totalTripSite ? (v.trips/totalTripSite*100) : 0;
+      const pctExt = totalTripSite ? (ev.trips/totalTripSite*100) : 0;
       tbody.innerHTML += `<tr><td style="font-weight:700;">${s}</td>
         <td class="mono">${fmtNum(v.trips)}</td>
+        <td class="mono">${fmtNum(ev.trips)}</td>
+        <td class="mono" style="color:var(--t3);">${pctInt.toFixed(0)}% / ${pctExt.toFixed(0)}%</td>
         <td class="mono">${fmtNum(v.cbm)}</td>
         <td class="mono" style="color:var(--t3);">${fmtNum(pv)}</td>
         <td><span class="badge ${deltaCls}">${deltaStr}</span></td></tr>`;
@@ -496,9 +531,9 @@ function renderFleet(){
 
   // insight
   const topSite = sites[0];
-  const worstDelta = sites.map(s=>({s, d: bySite[s].trips - (prevBySite[s]?prevBySite[s].trips:0)})).sort((a,b)=>a.d-b.d)[0];
+  const worstDelta = sites.map(s=>({s, d: (bySite[s]?.trips||0) - (prevBySite[s]?prevBySite[s].trips:0)})).sort((a,b)=>a.d-b.d)[0];
   document.getElementById('fleetInsight').innerHTML = `<b>Insight:</b><p>
-    ${topSite ? topSite : '-'} mencatat volume trip eksternal tertinggi pada periode ini (${topSite?fmtNum(bySite[topSite].trips):'-'} trip).
+    ${topSite ? topSite : '-'} mencatat volume trip internal tertinggi pada periode ini (${topSite?fmtNum(bySite[topSite]?.trips||0):'-'} trip).
     ${worstDelta && worstDelta.d<0 ? worstDelta.s + ' turun paling tajam (' + worstDelta.d + ' trip) dibanding periode sebelumnya — perlu ditelusuri.' : 'Semua site menunjukkan tren stabil atau naik dibanding periode sebelumnya.'}
   </p>`;
 
@@ -687,28 +722,47 @@ function renderEfficiency(){
   renderInsUjpTrend();
 }
 
+// Aggregates a DAILY_INS_DATA-shaped array (rows with a 'date' field) by date, summing
+// the given numeric fields. Used for both the current-period and MoM-comparison series
+// in the daily trend charts.
+function dailyAggByDate(dataArr, fromISO, toISOs, fields){
+  const rows = dataArr.filter(r => r.date >= fromISO && r.date <= toISOs);
+  const byDate = {};
+  rows.forEach(r => {
+    if(!byDate[r.date]){ byDate[r.date] = {}; fields.forEach(f=>byDate[r.date][f]=0); }
+    fields.forEach(f => byDate[r.date][f] += r[f]);
+  });
+  return byDate;
+}
+
 let doTripTrendChartObj = null;
 function renderDoTripTrend(){
   const fromISO = toISO(state.from), toISOs = toISO(state.to);
   const daySpan = Math.round((state.to - state.from) / 86400000) + 1;
   const useDaily = daySpan <= 31 && typeof DAILY_INS_DATA !== 'undefined';
-  document.getElementById('doTripTrendTag').textContent = useDaily ? 'volume harian (2026)' : 'volume per bulan';
 
-  let labels, do26, do25, trip26, trip25, showPrevYear;
+  let labels, do26, do25, trip26, trip25, showPrevYear, doMoM=null, tripMoM=null, momLabel=null;
 
   if(useDaily){
-    const rows = DAILY_INS_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
-    const byDate = {};
-    rows.forEach(r => {
-      if(!byDate[r.date]) byDate[r.date] = {do:0, trips:0};
-      byDate[r.date].do += r.do;
-      byDate[r.date].trips += r.trips;
-    });
+    const byDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['do','trips']);
     const dates = Object.keys(byDate).sort();
     labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
     do26 = dates.map(d => byDate[d].do);
     trip26 = dates.map(d => byDate[d].trips);
     do25 = null; trip25 = null; showPrevYear = false;
+
+    // MoM comparison: same day-of-month range in the previous calendar month
+    // (e.g. 7-15 Aug -> 7-15 Jul), aligned by position (day 1 of range vs day 1 of prior range).
+    const [pf, pt] = prevPeriod(state.from, state.to);
+    const prevByDate = dailyAggByDate(DAILY_INS_DATA, toISO(pf), toISO(pt), ['do','trips']);
+    const prevDates = Object.keys(prevByDate).sort();
+    if(prevDates.length){
+      const n = Math.min(dates.length, prevDates.length);
+      doMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].do : null);
+      tripMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].trips : null);
+      momLabel = MONTH_SHORT[pad2(pf.getUTCMonth()+1)];
+    }
+    document.getElementById('doTripTrendTag').textContent = momLabel ? `volume harian (2026) — vs ${momLabel}` : 'volume harian (2026)';
   } else {
     const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
     labels = months.map(m => MONTH_SHORT_EN[m]);
@@ -717,14 +771,17 @@ function renderDoTripTrend(){
     trip26 = months.map(m => INSIGHT_DATA[m].cur26.Trip);
     trip25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.Trip : null);
     showPrevYear = true;
+    document.getElementById('doTripTrendTag').textContent = 'volume per bulan';
   }
 
   const datasets = [
     { label:'DO 2026', data:do26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(do26.length>20?0:3):4, tension:.3, yAxisID:'yDo' },
   ];
   if(showPrevYear) datasets.push({ label:'DO 2025', data:do25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yDo' });
+  if(doMoM) datasets.push({ label:'DO '+momLabel, data:doMoM, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yDo' });
   datasets.push({ label:'Trip 2026', data:trip26, borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(trip26.length>20?0:3):4, tension:.3, yAxisID:'yTrip' });
   if(showPrevYear) datasets.push({ label:'Trip 2025', data:trip25, borderColor:'#f7d38a', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yTrip' });
+  if(tripMoM) datasets.push({ label:'Trip '+momLabel, data:tripMoM, borderColor:'#f7d38a', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yTrip' });
 
   const ctx = document.getElementById('doTripTrendChart').getContext('2d');
   if(doTripTrendChartObj) doTripTrendChartObj.destroy();
@@ -748,23 +805,27 @@ function renderInsUjpTrend(){
   const fromISO = toISO(state.from), toISOs = toISO(state.to);
   const daySpan = Math.round((state.to - state.from) / 86400000) + 1;
   const useDaily = daySpan <= 31 && typeof DAILY_INS_DATA !== 'undefined';
-  document.getElementById('insUjpTrendTag').textContent = useDaily ? 'total harian (2026)' : 'total per bulan';
 
-  let labels, ins26, ins25, ujp26, ujp25, showPrevYear;
+  let labels, ins26, ins25, ujp26, ujp25, showPrevYear, insMoM=null, ujpMoM=null, momLabel=null;
 
   if(useDaily){
-    const rows = DAILY_INS_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
-    const byDate = {};
-    rows.forEach(r => {
-      if(!byDate[r.date]) byDate[r.date] = {ins:0, ujp:0};
-      byDate[r.date].ins += r.ins;
-      byDate[r.date].ujp += r.ujp;
-    });
+    const byDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['ins','ujp']);
     const dates = Object.keys(byDate).sort();
     labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
     ins26 = dates.map(d => byDate[d].ins/1e6);
     ujp26 = dates.map(d => byDate[d].ujp/1e6);
     ins25 = null; ujp25 = null; showPrevYear = false;
+
+    const [pf, pt] = prevPeriod(state.from, state.to);
+    const prevByDate = dailyAggByDate(DAILY_INS_DATA, toISO(pf), toISO(pt), ['ins','ujp']);
+    const prevDates = Object.keys(prevByDate).sort();
+    if(prevDates.length){
+      const n = Math.min(dates.length, prevDates.length);
+      insMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].ins/1e6 : null);
+      ujpMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].ujp/1e6 : null);
+      momLabel = MONTH_SHORT[pad2(pf.getUTCMonth()+1)];
+    }
+    document.getElementById('insUjpTrendTag').textContent = momLabel ? `total harian (2026) — vs ${momLabel}` : 'total harian (2026)';
   } else {
     const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
     labels = months.map(m => MONTH_SHORT_EN[m]);
@@ -773,14 +834,17 @@ function renderInsUjpTrend(){
     ujp26 = months.map(m => INSIGHT_DATA[m].cur26.UJP/1e6);
     ujp25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.UJP/1e6 : null);
     showPrevYear = true;
+    document.getElementById('insUjpTrendTag').textContent = 'total per bulan';
   }
 
   const datasets = [
     { label:'Insentif 2026', data:ins26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(ins26.length>20?0:3):4, tension:.3, yAxisID:'yIns' },
   ];
   if(showPrevYear) datasets.push({ label:'Insentif 2025', data:ins25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yIns' });
+  if(insMoM) datasets.push({ label:'Insentif '+momLabel, data:insMoM, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yIns' });
   datasets.push({ label:'UJP 2026', data:ujp26, borderColor:'#00c49a', backgroundColor:'rgba(0,196,154,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(ujp26.length>20?0:3):4, tension:.3, yAxisID:'yUjp' });
   if(showPrevYear) datasets.push({ label:'UJP 2025', data:ujp25, borderColor:'#8fe3d1', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yUjp' });
+  if(ujpMoM) datasets.push({ label:'UJP '+momLabel, data:ujpMoM, borderColor:'#8fe3d1', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yUjp' });
 
   const ctx = document.getElementById('insUjpTrendChart').getContext('2d');
   if(insUjpTrendChartObj) insUjpTrendChartObj.destroy();
