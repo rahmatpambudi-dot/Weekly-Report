@@ -1,6 +1,28 @@
 // ===== Helpers =====
 const SITE_LABEL_PROD = {JABABEKA:'Jababeka',CIKUPA:'Cikupa',SDA:'Sidoarjo',TALLO:'Tallo',TAMORA:'Tamora'};
 const ROUTE_ORDER = ['JABABEKA','CIKUPA','SDA','TALLO','TAMORA'];
+
+// KPI targets — mirrors TARGETS in the source Productivity dashboard (dashboard_ndc_rdc.html)
+const KPI_TARGETS = {
+  olf:    { target: 85, fmt: v => v.toFixed(0)+'%' },
+  ritase: { targetBySite:{ JABABEKA:1.15, CIKUPA:1.05, SDA:1.07, TALLO:1.25, TAMORA:1.25 }, fmt: v => v.toFixed(2) },
+  doTrip: { target: 11.0, fmt: v => v.toFixed(1) },
+};
+function kpiTarget(key, site){
+  const t = KPI_TARGETS[key];
+  if(!t) return null;
+  return t.targetBySite ? t.targetBySite[site] : t.target;
+}
+// Achievement badge, styled like the source dashboard's mkBadgeSm(): 🎯target (pct%)
+// hit (green) >=100%, warn (amber) 90-99%, miss (red) <90%.
+function kpiBadge(key, val, site){
+  const t = KPI_TARGETS[key];
+  const tgt = kpiTarget(key, site);
+  if(!t || tgt==null || val==null) return '';
+  const pct = val/tgt*100;
+  const cls = pct>=100 ? 'hit' : pct>=90 ? 'warn' : 'miss';
+  return `<div class="kpi-badge-sm ${cls}">🎯 Target ${t.fmt(tgt)} (${pct.toFixed(0)}%)</div>`;
+}
 const MONTH_KEYS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08'];
 const MONTH_SHORT = {'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'Mei','06':'Jun','07':'Jul','08':'Agu'};
 const MPP_MONTH_FIELD = {'2026-01':'jan','2026-02':'feb','2026-03':'mar','2026-04':'apr','2026-05':'may','2026-06':'jun','2026-07':'jul','2026-08':'aug'};
@@ -147,9 +169,9 @@ function renderProductivity(){
       grid.appendChild(card); return;
     }
     const metrics = [
-      {label:'OLF (%)', val:d.olf.toFixed(1)+'%', delta: p? d.olf-p.olf : null, betterUp:true, suffix:' pt'},
-      {label:'Ritase', val:d.ritase.toFixed(2), delta: p? d.ritase-p.ritase : null, betterUp:true, suffix:''},
-      {label:'DO / Trip', val:d.doTrip.toFixed(1), delta: p? d.doTrip-p.doTrip : null, betterUp:true, suffix:''},
+      {label:'OLF (%)', val:d.olf.toFixed(1)+'%', delta: p? d.olf-p.olf : null, betterUp:true, suffix:' pt', badge: kpiBadge('olf', d.olf, site)},
+      {label:'Ritase', val:d.ritase.toFixed(2), delta: p? d.ritase-p.ritase : null, betterUp:true, suffix:'', badge: kpiBadge('ritase', d.ritase, site)},
+      {label:'DO / Trip', val:d.doTrip.toFixed(1), delta: p? d.doTrip-p.doTrip : null, betterUp:true, suffix:'', badge: kpiBadge('doTrip', d.doTrip, site)},
       {label:'TAT Direct (jam)', val:d.tatDirect.toFixed(1)+'j', delta: p? d.tatDirect-p.tatDirect : null, betterUp:false, suffix:'j'},
       {label:'Demand DO Customer', val:fmtNum(d.doCustomer), pctDelta: p? pctChange(d.doCustomer,p.doCustomer) : null, neutral:true},
       {label:'Store CBM', val:fmtNum(d.storeCbm,1)+' m³', pctDelta: p? pctChange(d.storeCbm,p.storeCbm) : null, neutral:true},
@@ -175,7 +197,7 @@ function renderProductivity(){
         const arrow = Math.abs(m.delta) < 0.005 ? '' : (isUp ? '▲ ' : '▼ ');
         deltaHtml = `<div class="rd ${cls}">${arrow}${Math.abs(m.delta).toFixed(2)}${m.suffix} vs periode lalu</div>`;
       }
-      body += `<div class="rm"><div class="rl">${m.label}</div><div class="rv">${m.val}</div>${deltaHtml}</div>`;
+      body += `<div class="rm"><div class="rl">${m.label}</div><div class="rv">${m.val}</div>${deltaHtml}${m.badge||''}</div>`;
     });
     card.innerHTML = `<div class="route-head">${SITE_LABEL_PROD[site]}</div><div class="route-body">${body}</div>`;
     grid.appendChild(card);
@@ -738,50 +760,34 @@ function dailyAggByDate(dataArr, fromISO, toISOs, fields){
 let doTripTrendChartObj = null;
 function renderDoTripTrend(){
   const fromISO = toISO(state.from), toISOs = toISO(state.to);
-  const daySpan = Math.round((state.to - state.from) / 86400000) + 1;
-  const useDaily = daySpan <= 31 && typeof DAILY_INS_DATA !== 'undefined';
 
-  let labels, do26, do25, trip26, trip25, showPrevYear, doMoM=null, tripMoM=null, momLabel=null;
+  const byDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['do','trips']);
+  const dates = Object.keys(byDate).sort();
+  const labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
+  const do26 = dates.map(d => byDate[d].do);
+  const trip26 = dates.map(d => byDate[d].trips);
 
-  if(useDaily){
-    const byDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['do','trips']);
-    const dates = Object.keys(byDate).sort();
-    labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
-    do26 = dates.map(d => byDate[d].do);
-    trip26 = dates.map(d => byDate[d].trips);
-    do25 = null; trip25 = null; showPrevYear = false;
-
-    // MoM comparison: same day-of-month range in the previous calendar month
-    // (e.g. 7-15 Aug -> 7-15 Jul), aligned by position (day 1 of range vs day 1 of prior range).
-    const [pf, pt] = prevPeriod(state.from, state.to);
-    const prevByDate = dailyAggByDate(DAILY_INS_DATA, toISO(pf), toISO(pt), ['do','trips']);
-    const prevDates = Object.keys(prevByDate).sort();
-    if(prevDates.length){
-      const n = Math.min(dates.length, prevDates.length);
-      doMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].do : null);
-      tripMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].trips : null);
-      momLabel = MONTH_SHORT[pad2(pf.getUTCMonth()+1)];
-    }
-    document.getElementById('doTripTrendTag').textContent = momLabel ? `volume harian (2026) — vs ${momLabel}` : 'volume harian (2026)';
-  } else {
-    const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
-    labels = months.map(m => MONTH_SHORT_EN[m]);
-    do26 = months.map(m => INSIGHT_DATA[m].cur26.DO);
-    do25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.DO : null);
-    trip26 = months.map(m => INSIGHT_DATA[m].cur26.Trip);
-    trip25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.Trip : null);
-    showPrevYear = true;
-    document.getElementById('doTripTrendTag').textContent = 'volume per bulan';
+  // MoM comparison: same day-of-month range in the previous calendar month
+  // (e.g. 7-15 Aug -> 7-15 Jul), aligned by position (day 1 of range vs day 1 of prior range).
+  const [pf, pt] = prevPeriod(state.from, state.to);
+  const prevByDate = dailyAggByDate(DAILY_INS_DATA, toISO(pf), toISO(pt), ['do','trips']);
+  const prevDates = Object.keys(prevByDate).sort();
+  let doMoM=null, tripMoM=null, momLabel=null;
+  if(prevDates.length){
+    const n = Math.min(dates.length, prevDates.length);
+    doMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].do : null);
+    tripMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].trips : null);
+    momLabel = MONTH_SHORT[pad2(pf.getUTCMonth()+1)];
   }
+  document.getElementById('doTripTrendTag').textContent = momLabel ? `volume harian (2026) — vs ${momLabel}` : 'volume harian (2026)';
 
+  const manyPoints = do26.length > 20;
   const datasets = [
-    { label:'DO 2026', data:do26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(do26.length>20?0:3):4, tension:.3, yAxisID:'yDo' },
+    { label:'DO 2026', data:do26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:2, pointRadius:manyPoints?0:3, tension:.3, yAxisID:'yDo' },
   ];
-  if(showPrevYear) datasets.push({ label:'DO 2025', data:do25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yDo' });
-  if(doMoM) datasets.push({ label:'DO '+momLabel, data:doMoM, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yDo' });
-  datasets.push({ label:'Trip 2026', data:trip26, borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(trip26.length>20?0:3):4, tension:.3, yAxisID:'yTrip' });
-  if(showPrevYear) datasets.push({ label:'Trip 2025', data:trip25, borderColor:'#f7d38a', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yTrip' });
-  if(tripMoM) datasets.push({ label:'Trip '+momLabel, data:tripMoM, borderColor:'#f7d38a', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yTrip' });
+  if(doMoM) datasets.push({ label:'DO '+momLabel, data:doMoM, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:manyPoints?0:3, tension:.3, fill:false, yAxisID:'yDo' });
+  datasets.push({ label:'Trip 2026', data:trip26, borderColor:'#f5a623', backgroundColor:'rgba(245,166,35,.08)', borderWidth:2, pointRadius:manyPoints?0:3, tension:.3, yAxisID:'yTrip' });
+  if(tripMoM) datasets.push({ label:'Trip '+momLabel, data:tripMoM, borderColor:'#f7d38a', borderDash:[5,4], borderWidth:2, pointRadius:manyPoints?0:3, tension:.3, fill:false, yAxisID:'yTrip' });
 
   const ctx = document.getElementById('doTripTrendChart').getContext('2d');
   if(doTripTrendChartObj) doTripTrendChartObj.destroy();
@@ -794,7 +800,7 @@ function renderDoTripTrend(){
       scales:{
         yDo:{ type:'linear', position:'left', beginAtZero:true, title:{display:true,text:'DO'}, grid:{color:'#e3e8f2'} },
         yTrip:{ type:'linear', position:'right', beginAtZero:true, title:{display:true,text:'Trip'}, grid:{display:false} },
-        x:{ grid:{display:false}, ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit: useDaily?10:12 } }
+        x:{ grid:{display:false}, ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit: 10 } }
       }
     }
   });
@@ -803,48 +809,32 @@ function renderDoTripTrend(){
 let insUjpTrendChartObj = null;
 function renderInsUjpTrend(){
   const fromISO = toISO(state.from), toISOs = toISO(state.to);
-  const daySpan = Math.round((state.to - state.from) / 86400000) + 1;
-  const useDaily = daySpan <= 31 && typeof DAILY_INS_DATA !== 'undefined';
 
-  let labels, ins26, ins25, ujp26, ujp25, showPrevYear, insMoM=null, ujpMoM=null, momLabel=null;
+  const byDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['ins','ujp']);
+  const dates = Object.keys(byDate).sort();
+  const labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
+  const ins26 = dates.map(d => byDate[d].ins/1e6);
+  const ujp26 = dates.map(d => byDate[d].ujp/1e6);
 
-  if(useDaily){
-    const byDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['ins','ujp']);
-    const dates = Object.keys(byDate).sort();
-    labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
-    ins26 = dates.map(d => byDate[d].ins/1e6);
-    ujp26 = dates.map(d => byDate[d].ujp/1e6);
-    ins25 = null; ujp25 = null; showPrevYear = false;
-
-    const [pf, pt] = prevPeriod(state.from, state.to);
-    const prevByDate = dailyAggByDate(DAILY_INS_DATA, toISO(pf), toISO(pt), ['ins','ujp']);
-    const prevDates = Object.keys(prevByDate).sort();
-    if(prevDates.length){
-      const n = Math.min(dates.length, prevDates.length);
-      insMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].ins/1e6 : null);
-      ujpMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].ujp/1e6 : null);
-      momLabel = MONTH_SHORT[pad2(pf.getUTCMonth()+1)];
-    }
-    document.getElementById('insUjpTrendTag').textContent = momLabel ? `total harian (2026) — vs ${momLabel}` : 'total harian (2026)';
-  } else {
-    const months = MONTH_ORDER_EN.filter(m => INSIGHT_DATA[m] && INSIGHT_DATA[m].cur26);
-    labels = months.map(m => MONTH_SHORT_EN[m]);
-    ins26 = months.map(m => INSIGHT_DATA[m].cur26.Insentif/1e6);
-    ins25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.Insentif/1e6 : null);
-    ujp26 = months.map(m => INSIGHT_DATA[m].cur26.UJP/1e6);
-    ujp25 = months.map(m => INSIGHT_DATA[m].cur25 ? INSIGHT_DATA[m].cur25.UJP/1e6 : null);
-    showPrevYear = true;
-    document.getElementById('insUjpTrendTag').textContent = 'total per bulan';
+  const [pf, pt] = prevPeriod(state.from, state.to);
+  const prevByDate = dailyAggByDate(DAILY_INS_DATA, toISO(pf), toISO(pt), ['ins','ujp']);
+  const prevDates = Object.keys(prevByDate).sort();
+  let insMoM=null, ujpMoM=null, momLabel=null;
+  if(prevDates.length){
+    const n = Math.min(dates.length, prevDates.length);
+    insMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].ins/1e6 : null);
+    ujpMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].ujp/1e6 : null);
+    momLabel = MONTH_SHORT[pad2(pf.getUTCMonth()+1)];
   }
+  document.getElementById('insUjpTrendTag').textContent = momLabel ? `total harian (2026) — vs ${momLabel}` : 'total harian (2026)';
 
+  const manyPoints = ins26.length > 20;
   const datasets = [
-    { label:'Insentif 2026', data:ins26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(ins26.length>20?0:3):4, tension:.3, yAxisID:'yIns' },
+    { label:'Insentif 2026', data:ins26, borderColor:'#1a2e6b', backgroundColor:'rgba(26,46,107,.08)', borderWidth:2, pointRadius:manyPoints?0:3, tension:.3, yAxisID:'yIns' },
   ];
-  if(showPrevYear) datasets.push({ label:'Insentif 2025', data:ins25, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yIns' });
-  if(insMoM) datasets.push({ label:'Insentif '+momLabel, data:insMoM, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yIns' });
-  datasets.push({ label:'UJP 2026', data:ujp26, borderColor:'#00c49a', backgroundColor:'rgba(0,196,154,.08)', borderWidth:useDaily?2:3, pointRadius:useDaily?(ujp26.length>20?0:3):4, tension:.3, yAxisID:'yUjp' });
-  if(showPrevYear) datasets.push({ label:'UJP 2025', data:ujp25, borderColor:'#8fe3d1', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yUjp' });
-  if(ujpMoM) datasets.push({ label:'UJP '+momLabel, data:ujpMoM, borderColor:'#8fe3d1', borderDash:[5,4], borderWidth:2, pointRadius:3, tension:.3, fill:false, yAxisID:'yUjp' });
+  if(insMoM) datasets.push({ label:'Insentif '+momLabel, data:insMoM, borderColor:'#94a1c2', borderDash:[5,4], borderWidth:2, pointRadius:manyPoints?0:3, tension:.3, fill:false, yAxisID:'yIns' });
+  datasets.push({ label:'UJP 2026', data:ujp26, borderColor:'#00c49a', backgroundColor:'rgba(0,196,154,.08)', borderWidth:2, pointRadius:manyPoints?0:3, tension:.3, yAxisID:'yUjp' });
+  if(ujpMoM) datasets.push({ label:'UJP '+momLabel, data:ujpMoM, borderColor:'#8fe3d1', borderDash:[5,4], borderWidth:2, pointRadius:manyPoints?0:3, tension:.3, fill:false, yAxisID:'yUjp' });
 
   const ctx = document.getElementById('insUjpTrendChart').getContext('2d');
   if(insUjpTrendChartObj) insUjpTrendChartObj.destroy();
@@ -858,7 +848,7 @@ function renderInsUjpTrend(){
       scales:{
         yIns:{ type:'linear', position:'left', beginAtZero:true, title:{display:true,text:'Insentif (Rp Jt)'}, grid:{color:'#e3e8f2'} },
         yUjp:{ type:'linear', position:'right', beginAtZero:true, title:{display:true,text:'UJP (Rp Jt)'}, grid:{display:false} },
-        x:{ grid:{display:false}, ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit: useDaily?10:12 } }
+        x:{ grid:{display:false}, ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit: 10 } }
       }
     }
   });
