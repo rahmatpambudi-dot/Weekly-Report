@@ -142,6 +142,11 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
 
 .chart-wrap{position:relative;height:320px;}
 .chart-wrap.tall{height:360px;}
+/* yoyTrendChart uses a fixed-resolution canvas (not Chart.js responsive resize) — see
+   app.js comment near its creation for why — so it's scaled to fit via plain CSS instead.
+   The wrapping .chart-wrap uses aspect-ratio (inline style) instead of a fixed height so
+   the container always matches the canvas's real proportions on any screen/print width. */
+#yoyTrendChart{width:100% !important;height:100% !important;}
 
 .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700;}
 .badge.green{background:var(--gbg);color:var(--green);}
@@ -166,32 +171,47 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
 
 .empty{padding:30px;text-align:center;color:var(--t3);font-size:12.5px;}
 
-/* Print / export */
+/* Print / export — portrait-only by design: relying on @page landscape is fragile
+   across browsers/print drivers (some rotate the content 90° to force it onto the
+   OS's default portrait paper instead of switching orientation). Portrait avoids
+   that mismatch entirely; wide elements (route cards, fleet table) are laid out in
+   fewer columns / smaller type instead of relying on extra landscape width. */
 @page{
-  size: A4 landscape;
-  margin: 10mm 8mm;
+  size: A4 portrait;
+  margin: 12mm 10mm;
 }
 @media print{
   html,body{width:auto;height:auto;min-height:0;overflow:visible;}
   .sidebar,.topbar .tb-right,.no-print{display:none !important;}
   .main{margin-left:0;}
-  body{background:#fff;display:block;font-size:11.5px;}
+  body{background:#fff;display:block;font-size:10.5px;}
   .content{padding:0;}
-  .section{margin-bottom:16px;}
+  .section{margin-bottom:14px;}
   .sec-head{page-break-after:avoid;}
-  .kpi,.route-card,.note-card,.insight-box,.chart-wrap,.chart-panel{page-break-inside:avoid;}
+  .kpi,.route-card,.note-card,.insight-box,.chart-wrap,.chart-panel,.eff-row,.conclusion-box{page-break-inside:avoid;}
   table{page-break-inside:auto;}
   tr{page-break-inside:avoid;}
-  .kpi-row{display:grid !important;grid-template-columns:repeat(4,1fr) !important;gap:8px;margin-bottom:14px;}
-  .route-grid{display:grid !important;grid-template-columns:repeat(5,1fr) !important;gap:8px;}
-  .grid2{display:grid !important;grid-template-columns:1.35fr 1fr !important;gap:10px;}
+  .kpi-row{display:grid !important;grid-template-columns:repeat(2,1fr) !important;gap:8px;margin-bottom:12px;}
+  .route-grid{display:grid !important;grid-template-columns:repeat(2,1fr) !important;gap:8px;}
+  .grid2{display:grid !important;grid-template-columns:1fr !important;gap:10px;}
   .panel,.kpi,.route-card{box-shadow:none;border:1px solid #ccc;}
   .topbar{position:static;border-bottom:2px solid var(--navy);padding:0 0 8px;margin-bottom:10px;}
-  .chart-wrap{height:260px;}
-  .chart-wrap.tall{height:290px;}
-  .kpi{padding:10px 12px;}
-  .kpi .val{font-size:18px;}
-  h1,.tb-title{font-size:16px;}
+  .chart-wrap{height:220px;}
+  .chart-wrap.tall{height:240px;}
+  .kpi{padding:8px 10px;}
+  .kpi .val{font-size:16px;}
+  h1,.tb-title{font-size:15px;}
+  /* Fleet table (Ringkasan per Site/BU) has 8 data columns + grouped header — too wide
+     for portrait at screen sizing, so shrink type/padding and drop the min-width floors
+     on the value/pct/badge sub-cells so they can compress instead of overflowing. */
+  #fleetTable{font-size:8.5px;}
+  #fleetTable th,#fleetTable td{padding:4px 4px;}
+  #fleetTable .cell-pct,#fleetTable .cell-badge{min-width:0;}
+  #fleetTable .badge{padding:1px 4px !important;font-size:7.5px !important;}
+  #fleetTable .cell-flex{gap:3px;flex-wrap:wrap;justify-content:flex-end;}
+  .route-card .rm{margin-bottom:8px;}
+  .route-card .rv{font-size:15px;}
+  .kpi-badge-sm{font-size:8px;}
 }
 body.export-mode .sidebar,body.export-mode .tb-right .no-export{display:none;}
 body.export-mode .main{margin-left:0;}
@@ -376,7 +396,7 @@ body.export-mode .main{margin-left:0;}
       <div class="panel chart-panel" style="margin-top:16px;">
         <div class="ph"><h3>Trend Trip — 2025 vs 2026</h3><span class="tag" id="trendYoyTag">Jan–Agu</span></div>
         <div class="pb">
-          <div class="chart-wrap"><canvas id="yoyTrendChart"></canvas></div>
+          <div class="chart-wrap" style="height:auto;aspect-ratio:960/300;"><canvas id="yoyTrendChart" width="960" height="300"></canvas></div>
           <div style="font-size:11px;color:var(--t3);margin-top:8px;" id="yoyTrendFooter"></div>
         </div>
       </div>
