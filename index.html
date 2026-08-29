@@ -147,6 +147,10 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
    The wrapping .chart-wrap uses aspect-ratio (inline style) instead of a fixed height so
    the container always matches the canvas's real proportions on any screen/print width. */
 #yoyTrendChart{width:100% !important;height:100% !important;}
+/* Same fixed-canvas approach for the two MoM trend charts — these also got hit by the
+   same Chromium print-resize race (canvas stuck at its pre-print half-width size instead
+   of filling the full-width single-column print layout). */
+#doTripTrendChart,#insUjpTrendChart{width:100% !important;height:100% !important;}
 
 .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700;}
 .badge.green{background:var(--gbg);color:var(--green);}
@@ -191,16 +195,31 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
   .kpi,.route-card,.note-card,.insight-box,.chart-wrap,.chart-panel,.eff-row,.conclusion-box{page-break-inside:avoid;}
   table{page-break-inside:auto;}
   tr{page-break-inside:avoid;}
-  .kpi-row{display:grid !important;grid-template-columns:repeat(2,1fr) !important;gap:8px;margin-bottom:12px;}
-  .route-grid{display:grid !important;grid-template-columns:repeat(2,1fr) !important;gap:8px;}
+  .kpi-row{display:grid !important;grid-template-columns:repeat(4,1fr) !important;gap:6px;margin-bottom:10px;}
+  .route-grid{display:grid !important;grid-template-columns:repeat(5,1fr) !important;gap:6px;}
   .grid2{display:grid !important;grid-template-columns:1fr !important;gap:10px;}
+  #effCompareGrid{grid-template-columns:1fr 1fr !important;gap:8px;}
   .panel,.kpi,.route-card{box-shadow:none;border:1px solid #ccc;}
   .topbar{position:static;border-bottom:2px solid var(--navy);padding:0 0 8px;margin-bottom:10px;}
   .chart-wrap{height:220px;}
   .chart-wrap.tall{height:240px;}
-  .kpi{padding:8px 10px;}
-  .kpi .val{font-size:16px;}
+  .kpi{padding:6px 8px;}
+  .kpi .val{font-size:14px;}
+  .kpi .lbl{font-size:8px;}
+  .kpi .sub{font-size:7.5px;}
   h1,.tb-title{font-size:15px;}
+  /* Efisiensi MoM/YoY panels: back to 2 columns (like screen) instead of stacked, so both
+     fit on one page — each .eff-row is shrunk hard to survive the narrower column width. */
+  .eff-row{gap:5px;padding:4px 0;}
+  .eff-icon{width:16px;height:16px;border-radius:4px;font-size:8px;}
+  .eff-label{font-size:7px;}
+  .eff-values{font-size:6px;margin-top:0;}
+  .eff-right{gap:3px;}
+  .eff-pct{font-size:7px;min-width:30px;}
+  .eff-right > span:last-child{font-size:6px !important;}
+  .conclusion-box{padding:6px 8px;margin-top:6px;}
+  .conclusion-box .cb-title{font-size:8px;margin-bottom:3px;}
+  .conclusion-box li{font-size:6.5px;line-height:1.4;}
   /* Fleet table (Ringkasan per Site/BU) has 8 data columns + grouped header — too wide
      for portrait at screen sizing, so shrink type/padding and drop the min-width floors
      on the value/pct/badge sub-cells so they can compress instead of overflowing. */
@@ -209,9 +228,21 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
   #fleetTable .cell-pct,#fleetTable .cell-badge{min-width:0;}
   #fleetTable .badge{padding:1px 4px !important;font-size:7.5px !important;}
   #fleetTable .cell-flex{gap:3px;flex-wrap:wrap;justify-content:flex-end;}
-  .route-card .rm{margin-bottom:8px;}
-  .route-card .rv{font-size:15px;}
-  .kpi-badge-sm{font-size:8px;}
+  /* Route cards (Productivity per Jalur): 5-across like the screen view, but each card
+     holds 10 metrics + KPI badges, so everything inside is shrunk hard to fit one page. */
+  .route-head{padding:5px 6px;font-size:9px;}
+  .route-body{padding:6px 7px;}
+  .route-card .rm{margin-bottom:3px;}
+  .route-card .rm .rl{font-size:5.6px;letter-spacing:.2px;}
+  .route-card .rm .rv{font-size:9.5px;margin:0;}
+  .route-card .rm .rd{font-size:5.6px;}
+  .kpi-badge-sm{font-size:5.2px;margin-top:0;}
+  /* Productivity NDC-RDC summary bar (navy strip above the 5 route cards) — shrink hard
+     too, same reason as the route cards, so page 1 has room left for Catatan & Action Plan. */
+  #ndcRdcAvgPanel{margin-bottom:8px !important;}
+  #ndcRdcAvgPanel .pb{padding:6px 8px !important;gap:6px !important;}
+  #ndcRdcAvgPanel .lbl{font-size:6.5px !important;margin-bottom:0 !important;}
+  #ndcRdcAvgPanel .val{font-size:13px !important;margin-top:2px !important;}
 }
 body.export-mode .sidebar,body.export-mode .tb-right .no-export{display:none;}
 body.export-mode .main{margin-left:0;}
@@ -328,11 +359,11 @@ body.export-mode .main{margin-left:0;}
       <div class="grid2" style="grid-template-columns:1fr 1fr;margin-top:16px;">
         <div class="panel chart-panel">
           <div class="ph"><h3>DO &amp; Trip Trend — MoM</h3><span class="tag" id="doTripTrendTag">volume per bulan</span></div>
-          <div class="pb"><div class="chart-wrap"><canvas id="doTripTrendChart"></canvas></div></div>
+          <div class="pb"><div class="chart-wrap" style="height:auto;aspect-ratio:960/300;"><canvas id="doTripTrendChart" width="960" height="300"></canvas></div></div>
         </div>
         <div class="panel chart-panel">
           <div class="ph"><h3>Insentif &amp; UJP Trend — MoM</h3><span class="tag" id="insUjpTrendTag">total per bulan</span></div>
-          <div class="pb"><div class="chart-wrap"><canvas id="insUjpTrendChart"></canvas></div></div>
+          <div class="pb"><div class="chart-wrap" style="height:auto;aspect-ratio:960/300;"><canvas id="insUjpTrendChart" width="960" height="300"></canvas></div></div>
         </div>
       </div>
     </div>
