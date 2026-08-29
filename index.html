@@ -123,6 +123,13 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
 .insight-box li{font-size:12px;color:#1e293b;line-height:1.6;margin-bottom:3px;}
 
 .note-card{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--bg);}
+/* Notes/Action Plan grid: auto-fit instead of a hardcoded column count, so it genuinely
+   adapts to both the available width (1 column on a phone, 2-3+ on a wide screen) and
+   to how many sites are flagged (a single flagged site just gets one full card, not a
+   half-empty 2-column row). minmax(280px,1fr) is the readable floor for a card with two
+   textareas before it wraps to the next row. */
+.notes-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:14px;align-items:start;}
+.note-card{max-width:640px;}
 .note-card .nc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
 .note-card .nc-title{font-size:12.5px;font-weight:800;color:var(--navy);}
 .note-card .nc-flag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;}
@@ -388,7 +395,7 @@ body.export-mode .main{margin-left:0;}
             <button class="btn btn-ghost no-print" id="copyNotesBtn" style="padding:6px 12px;font-size:11.5px;">📋 Salin semua</button>
           </div>
         </div>
-        <div class="pb" id="notesGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;"></div>
+        <div class="pb notes-grid" id="notesGrid"></div>
       </div>
     </div>
 
