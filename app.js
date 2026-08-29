@@ -95,6 +95,17 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   render();
 });
 document.getElementById('pdfBtn').addEventListener('click', () => window.print());
+// Chart.js sizes its canvas off the container at creation time; when print CSS shrinks
+// .chart-wrap height/width, the canvas doesn't repaint on its own, so charts print blank
+// or mis-sized unless we force a resize+redraw right before the print dialog opens.
+window.addEventListener('beforeprint', () => {
+  [trendChartObj, doTripTrendChartObj, insUjpTrendChartObj].forEach(c => {
+    if(c){ c.resize(); c.update('none'); } // 'none' = skip animation, render synchronously so
+                                            // Chromium's print/PDF snapshot doesn't catch a mid-redraw frame
+  });
+  // yoyTrendChartObj is intentionally excluded — it uses a fixed-size canvas (see its
+  // creation in renderYoyTrend) so it doesn't need or want a resize here.
+});
 
 document.querySelectorAll('.s-item').forEach(item => {
   item.addEventListener('click', () => {
@@ -597,7 +608,13 @@ function renderYoyTrend(){
       ]
     },
     options: {
-      responsive:true, maintainAspectRatio:false,
+      // responsive:false + a fixed canvas width/height (set in HTML) instead of the usual
+      // responsive+maintainAspectRatio:false combo: this chart is the one most consistently
+      // hit by a Chromium print-to-PDF bug where a canvas that resizes/redraws right before
+      // printing gets rasterized mid-redraw (partial line, missing right-hand months). Fixing
+      // the canvas's drawing buffer at creation time and scaling it visually via CSS instead
+      // sidesteps the resize-during-print race entirely. See index.html for the matching CSS.
+      responsive:false,
       plugins:{ legend:{display:true, position:'top', align:'end'} },
       scales:{ y:{ beginAtZero:true, grid:{color:'#e3e8f2'}, title:{display:true,text:'Trip'} }, x:{ grid:{display:false} } }
     }
