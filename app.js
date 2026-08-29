@@ -99,12 +99,9 @@ document.getElementById('pdfBtn').addEventListener('click', () => window.print()
 // .chart-wrap height/width, the canvas doesn't repaint on its own, so charts print blank
 // or mis-sized unless we force a resize+redraw right before the print dialog opens.
 window.addEventListener('beforeprint', () => {
-  [trendChartObj, doTripTrendChartObj, insUjpTrendChartObj].forEach(c => {
-    if(c){ c.resize(); c.update('none'); } // 'none' = skip animation, render synchronously so
-                                            // Chromium's print/PDF snapshot doesn't catch a mid-redraw frame
-  });
-  // yoyTrendChartObj is intentionally excluded — it uses a fixed-size canvas (see its
-  // creation in renderYoyTrend) so it doesn't need or want a resize here.
+  if(trendChartObj){ trendChartObj.resize(); trendChartObj.update('none'); }
+  // yoyTrendChartObj, doTripTrendChartObj, insUjpTrendChartObj are intentionally excluded —
+  // they use fixed-size canvases (see their creation in app.js) so they don't need resizing.
 });
 
 document.querySelectorAll('.s-item').forEach(item => {
@@ -827,7 +824,10 @@ function renderDoTripTrend(){
     type: 'line',
     data: { labels, datasets },
     options: {
-      responsive:true, maintainAspectRatio:false,
+      // responsive:false + fixed canvas size (see index.html) — same fix as yoyTrendChart:
+      // sidesteps a Chromium print-to-PDF race where a responsive canvas resized right
+      // before printing gets rasterized at its old (pre-resize) size.
+      responsive:false,
       plugins:{ legend:{display:true, position:'top', align:'end'} },
       scales:{
         yDo:{ type:'linear', position:'left', beginAtZero:true, title:{display:true,text:'DO'}, grid:{color:'#e3e8f2'} },
@@ -874,7 +874,7 @@ function renderInsUjpTrend(){
     type: 'line',
     data: { labels, datasets },
     options: {
-      responsive:true, maintainAspectRatio:false,
+      responsive:false, // see doTripTrendChartObj comment — same fixed-canvas print fix
       plugins:{ legend:{display:true, position:'top', align:'end'},
         tooltip:{callbacks:{label: ctx => ctx.dataset.label + ': Rp ' + ctx.parsed.y.toFixed(1) + ' Jt'}} },
       scales:{
