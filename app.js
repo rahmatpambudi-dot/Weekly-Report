@@ -454,7 +454,7 @@ function renderFleet(){
   const totalCbm = rows.reduce((a,r)=>a+r.cbm,0);
   const prevTotalTrips = prevRows.reduce((a,r)=>a+r.trips,0);
 
-  document.getElementById('fleetTag').textContent = fromISO + ' → ' + toISOs;
+  document.getElementById('fleetTag').textContent = fromISO + ' → ' + toISOs + '  (vs ' + toISO(pf) + ' → ' + toISO(pt) + ')';
   document.getElementById('fleetKpiTrip').textContent = fmtNum(totalTrips) + ' trip';
   const tripDelta = totalTrips - prevTotalTrips;
   const tripUp = tripDelta >= 0;
@@ -468,36 +468,47 @@ function renderFleet(){
 
   const extRows = EXT_FLEET_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
   const extBySite = sumFleetBySite(extRows);
+  const prevExtRows = EXT_FLEET_DATA.filter(r => r.date >= toISO(pf) && r.date <= toISO(pt));
+  const prevExtBySite = sumFleetBySite(prevExtRows);
 
   const tbody = document.querySelector('#fleetTable tbody');
   tbody.innerHTML = '';
-  const allSites = new Set([...Object.keys(bySite), ...Object.keys(extBySite)]);
+  const allSites = new Set([...Object.keys(bySite), ...Object.keys(extBySite), ...Object.keys(prevBySite), ...Object.keys(prevExtBySite)]);
   const sites = [...allSites].sort((a,b) => {
     const totA = (bySite[a]?.trips||0) + (extBySite[a]?.trips||0);
     const totB = (bySite[b]?.trips||0) + (extBySite[b]?.trips||0);
     return totB - totA;
   });
   if(sites.length===0){
-    tbody.innerHTML = '<tr><td colspan="8" class="empty">Tidak ada data pada periode ini</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">Tidak ada data pada periode ini</td></tr>';
   } else {
     sites.forEach(s => {
       const v = bySite[s] || {trips:0, cbm:0};
       const ev = extBySite[s] || {trips:0, cbm:0};
-      const pv = prevBySite[s] ? prevBySite[s].trips : 0;
-      const delta = v.trips - pv;
-      const deltaCls = delta >= 0 ? 'green' : 'red';
-      const pct = pv > 0 ? (delta / pv * 100) : (v.trips > 0 ? 100 : 0);
-      const deltaStr = (delta >= 0 ? '▲ +' : '▼ ') + Math.abs(pct).toFixed(1) + '%';
-      const totalTripSite = v.trips + ev.trips;
-      const pctInt = totalTripSite ? (v.trips/totalTripSite*100) : 0;
-      const pctExt = totalTripSite ? (ev.trips/totalTripSite*100) : 0;
+      const pv = prevBySite[s] || {trips:0, cbm:0};
+      const pev = prevExtBySite[s] || {trips:0, cbm:0};
+
+      const totalCur = v.trips + ev.trips;
+      const pctIntCur = totalCur ? (v.trips/totalCur*100) : 0;
+      const pctExtCur = totalCur ? (ev.trips/totalCur*100) : 0;
+
+      const totalPrev = pv.trips + pev.trips;
+      const pctIntPrev = totalPrev ? (pv.trips/totalPrev*100) : 0;
+      const pctExtPrev = totalPrev ? (pev.trips/totalPrev*100) : 0;
+
+      const totalDelta = totalCur - totalPrev;
+      const deltaCls = totalDelta >= 0 ? 'green' : 'red';
+      const pctDeltaDisp = totalPrev > 0 ? (totalDelta / totalPrev * 100) : (totalCur > 0 ? 100 : 0);
+      const deltaStr = (totalDelta >= 0 ? '▲ +' : '▼ ') + Math.abs(pctDeltaDisp).toFixed(1) + '%';
+
       tbody.innerHTML += `<tr><td style="font-weight:700;">${s}</td>
-        <td class="mono" style="font-weight:700;">${fmtNum(totalTripSite)}</td>
-        <td class="mono">${fmtNum(v.trips)}</td>
-        <td class="mono">${fmtNum(ev.trips)}</td>
-        <td class="mono" style="color:var(--t3);">${pctInt.toFixed(0)}% / ${pctExt.toFixed(0)}%</td>
+        <td class="mono" style="font-weight:700;">${fmtNum(totalCur)}</td>
+        <td class="mono">${fmtNum(v.trips)} <span style="color:var(--t3);">(${pctIntCur.toFixed(0)}%)</span></td>
+        <td class="mono">${fmtNum(ev.trips)} <span style="color:var(--t3);">(${pctExtCur.toFixed(0)}%)</span></td>
+        <td class="mono" style="color:var(--t3);font-weight:700;">${fmtNum(totalPrev)}</td>
+        <td class="mono" style="color:var(--t3);">${fmtNum(pv.trips)} <span>(${pctIntPrev.toFixed(0)}%)</span></td>
+        <td class="mono" style="color:var(--t3);">${fmtNum(pev.trips)} <span>(${pctExtPrev.toFixed(0)}%)</span></td>
         <td class="mono">${fmtNum(v.cbm)}</td>
-        <td class="mono" style="color:var(--t3);">${fmtNum(pv)}</td>
         <td><span class="badge ${deltaCls}">${deltaStr}</span></td></tr>`;
     });
   }
