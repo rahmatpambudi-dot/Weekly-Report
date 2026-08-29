@@ -97,11 +97,14 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 
 table.dt{width:100%;border-collapse:collapse;font-size:12px;}
 .dt thead th{padding:9px 11px;text-align:right;font-weight:700;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border);white-space:nowrap;background:var(--bg);}
-.dt thead th:first-child,.dt thead th:nth-child(2){text-align:left;}
+.dt thead th:first-child{text-align:left;}
 .dt tbody td{padding:8px 11px;border-bottom:1px solid var(--border);color:var(--text);white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right;}
-.dt tbody td:first-child,.dt tbody td:nth-child(2){text-align:left;}
+.dt tbody td:first-child{text-align:left;}
 .dt tbody tr:last-child td{border-bottom:none;}
 .dt tbody tr:hover{background:var(--bg);}
+.dt .cell-flex{display:inline-flex;align-items:baseline;justify-content:flex-end;gap:6px;width:100%;}
+.dt .cell-pct{color:var(--t3);min-width:38px;text-align:right;}
+.dt .cell-badge{min-width:52px;text-align:right;}
 .rank{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--bg);color:var(--t2);font-size:10px;font-weight:800;}
 .rank.top{background:var(--navy);color:#fff;}
 
