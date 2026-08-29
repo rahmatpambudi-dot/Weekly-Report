@@ -479,6 +479,14 @@ function renderFleet(){
     const totB = (bySite[b]?.trips||0) + (extBySite[b]?.trips||0);
     return totB - totA;
   });
+  // Small delta badge next to a "periode terpilih" value, comparing it to its periode-sebelumnya counterpart.
+  const miniBadge = (cur, prev) => {
+    const pct = pctChange(cur, prev);
+    if(prev === 0 && cur === 0) return `<span class="badge gray" style="padding:1px 6px;font-size:9px;">–</span>`;
+    const cls = Math.abs(pct) < 0.05 ? 'gray' : (pct >= 0 ? 'green' : 'red');
+    const arrow = Math.abs(pct) < 0.05 ? '' : (pct >= 0 ? '▲ ' : '▼ ');
+    return `<span class="badge ${cls}" style="padding:1px 6px;font-size:9px;">${arrow}${Math.abs(pct).toFixed(1)}%</span>`;
+  };
   if(sites.length===0){
     tbody.innerHTML = '<tr><td colspan="9" class="empty">Tidak ada data pada periode ini</td></tr>';
   } else {
@@ -496,20 +504,15 @@ function renderFleet(){
       const pctIntPrev = totalPrev ? (pv.trips/totalPrev*100) : 0;
       const pctExtPrev = totalPrev ? (pev.trips/totalPrev*100) : 0;
 
-      const totalDelta = totalCur - totalPrev;
-      const deltaCls = totalDelta >= 0 ? 'green' : 'red';
-      const pctDeltaDisp = totalPrev > 0 ? (totalDelta / totalPrev * 100) : (totalCur > 0 ? 100 : 0);
-      const deltaStr = (totalDelta >= 0 ? '▲ +' : '▼ ') + Math.abs(pctDeltaDisp).toFixed(1) + '%';
-
       tbody.innerHTML += `<tr><td style="font-weight:700;">${s}</td>
-        <td class="mono" style="font-weight:700;">${fmtNum(totalCur)}</td>
-        <td class="mono">${fmtNum(v.trips)} <span style="color:var(--t3);">(${pctIntCur.toFixed(0)}%)</span></td>
-        <td class="mono">${fmtNum(ev.trips)} <span style="color:var(--t3);">(${pctExtCur.toFixed(0)}%)</span></td>
+        <td class="mono" style="font-weight:700;">${fmtNum(totalCur)} ${miniBadge(totalCur, totalPrev)}</td>
+        <td class="mono">${fmtNum(v.trips)} <span style="color:var(--t3);">(${pctIntCur.toFixed(0)}%)</span> ${miniBadge(v.trips, pv.trips)}</td>
+        <td class="mono">${fmtNum(ev.trips)} <span style="color:var(--t3);">(${pctExtCur.toFixed(0)}%)</span> ${miniBadge(ev.trips, pev.trips)}</td>
+        <td class="mono">${fmtNum(v.cbm)} ${miniBadge(v.cbm, pv.cbm)}</td>
         <td class="mono" style="color:var(--t3);font-weight:700;">${fmtNum(totalPrev)}</td>
-        <td class="mono" style="color:var(--t3);">${fmtNum(pv.trips)} <span>(${pctIntPrev.toFixed(0)}%)</span></td>
-        <td class="mono" style="color:var(--t3);">${fmtNum(pev.trips)} <span>(${pctExtPrev.toFixed(0)}%)</span></td>
-        <td class="mono">${fmtNum(v.cbm)}</td>
-        <td><span class="badge ${deltaCls}">${deltaStr}</span></td></tr>`;
+        <td class="mono" style="color:var(--t3);">${fmtNum(pv.trips)} (${pctIntPrev.toFixed(0)}%)</td>
+        <td class="mono" style="color:var(--t3);">${fmtNum(pev.trips)} (${pctExtPrev.toFixed(0)}%)</td>
+        <td class="mono" style="color:var(--t3);">${fmtNum(pv.cbm)}</td></tr>`;
     });
   }
 
