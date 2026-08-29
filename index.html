@@ -35,7 +35,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(-
 .s-foot{padding:16px 20px;border-top:1px solid rgba(255,255,255,.1);font-size:10.5px;color:rgba(255,255,255,.4);}
 
 /* Main */
-.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;}
+.main{margin-left:var(--sw);flex:1;min-width:0;display:flex;flex-direction:column;}
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
 .tb-title{font-size:17px;font-weight:800;color:var(--text);}
 .tb-sub{font-size:11.5px;color:var(--t3);margin-top:2px;}
@@ -250,14 +250,62 @@ body.export-mode .main{margin-left:0;}
 @media screen and (max-width:1100px){
   .route-grid{grid-template-columns:repeat(3,1fr);}
   .kpi-row{grid-template-columns:repeat(2,1fr);}
-  .grid2{grid-template-columns:1fr;}
+  .grid2{grid-template-columns:1fr !important;}
+}
+
+/* ===== Mobile / responsive ===== */
+.hamburger-btn{display:none;background:none;border:none;font-size:20px;color:var(--text);cursor:pointer;padding:4px 6px;line-height:1;}
+.s-close{display:none;background:none;border:none;color:#fff;font-size:16px;cursor:pointer;position:absolute;top:16px;right:14px;padding:4px;line-height:1;}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(15,27,61,.45);z-index:19;}
+
+@media screen and (max-width:860px){
+  .hamburger-btn{display:block;}
+  .s-close{display:block;}
+  .sidebar{transform:translateX(-100%);transition:transform .22s ease;box-shadow:none;}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow-md);}
+  .sidebar-overlay.open{display:block;}
+  .s-logo{position:relative;}
+  .main{margin-left:0;min-width:0;}
+  .content{padding:14px 14px 40px;min-width:0;}
+  .topbar{padding:10px 14px;flex-direction:column;align-items:stretch;gap:10px;}
+  .tb-title{font-size:14.5px;}
+  .tb-sub{font-size:10px;}
+  .tb-right{width:100%;gap:8px;justify-content:flex-start;min-width:0;}
+  .filt{flex-wrap:wrap;padding:6px 8px;width:100%;min-width:0;}
+  .btn{padding:8px 12px;font-size:11.5px;flex:1;min-width:0;}
+  .sec-title{font-size:16px;}
+  .kpi-row{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px;}
+  .kpi{padding:10px 12px;}
+  .kpi .val{font-size:19px;}
+  .route-grid{grid-template-columns:1fr;gap:10px;}
+  .grid2{grid-template-columns:1fr;gap:10px;}
+  .ph{padding:12px 14px;flex-wrap:wrap;gap:6px;}
+  .pb{padding:12px 14px;}
+  /* Fleet table has 8 dense columns + a grouped header — doesn't fit a phone screen no
+     matter how small the type gets, so let it scroll horizontally within its panel
+     (the wrapping .pb already has overflow-x:auto) instead of squeezing/wrapping numbers. */
+  #fleetTable{font-size:10.5px;min-width:640px;}
+}
+@media screen and (max-width:420px){
+  .kpi-row{grid-template-columns:1fr;}
+}
+@media screen and (max-width:860px){
+  #ndcRdcAvgPanel .pb{grid-template-columns:repeat(2,1fr) !important;gap:10px !important;}
+  #effCompareGrid{grid-template-columns:1fr !important;}
+}
+/* Phone in landscape (short but wide enough) — use the extra width instead of stacking
+   route cards into one long full-width column each. */
+@media screen and (max-width:860px) and (min-width:640px){
+  .route-grid{grid-template-columns:repeat(2,1fr);}
 }
 </style>
 </head>
 <body>
 
-<div class="sidebar no-print">
+<div class="sidebar-overlay no-print" id="sidebarOverlay"></div>
+<div class="sidebar no-print" id="sidebar">
   <div class="s-logo">
+    <button class="s-close no-export" id="sidebarClose" aria-label="Tutup menu">✕</button>
     <div class="s-title">Kawan Lama Group</div>
     <div class="s-sub">SCM · NDC-RDC Report</div>
   </div>
@@ -273,9 +321,12 @@ body.export-mode .main{margin-left:0;}
 
 <div class="main">
   <div class="topbar">
-    <div>
-      <div class="tb-title">Weekly Report — Internal NDC &amp; RDC</div>
-      <div class="tb-sub">Productivity · Insentif · Fleet Support</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="hamburger-btn no-export" id="hamburgerBtn" aria-label="Buka menu">☰</button>
+      <div>
+        <div class="tb-title">Weekly Report — Internal NDC &amp; RDC</div>
+        <div class="tb-sub">Productivity · Insentif · Fleet Support</div>
+      </div>
     </div>
     <div class="tb-right">
       <div class="filt no-print">
