@@ -98,11 +98,10 @@ document.getElementById('pdfBtn').addEventListener('click', () => window.print()
 // Chart.js sizes its canvas off the container at creation time; when print CSS shrinks
 // .chart-wrap height/width, the canvas doesn't repaint on its own, so charts print blank
 // or mis-sized unless we force a resize+redraw right before the print dialog opens.
-window.addEventListener('beforeprint', () => {
-  if(trendChartObj){ trendChartObj.resize(); trendChartObj.update('none'); }
-  // yoyTrendChartObj, doTripTrendChartObj, insUjpTrendChartObj are intentionally excluded —
-  // they use fixed-size canvases (see their creation in app.js) so they don't need resizing.
-});
+// All trend charts now use a fixed-size canvas (see their creation code) instead of
+// Chart.js's responsive resize, specifically to avoid a Chromium print-to-PDF race where
+// a canvas resized right before printing gets rasterized at its old (pre-resize) size —
+// so no beforeprint-triggered resize is needed for any of them anymore.
 
 document.querySelectorAll('.s-item').forEach(item => {
   item.addEventListener('click', () => {
@@ -428,7 +427,11 @@ function renderTrend(){
     type:'line',
     data:{ labels, datasets },
     options:{
-      responsive:true, maintainAspectRatio:false,
+      // responsive:false + fixed canvas (see index.html) — same fix as the other trend
+      // charts: sidesteps a Chromium print-to-PDF race where a responsive canvas resized
+      // right before printing gets rasterized at its old (pre-resize) size, cutting off
+      // the right-hand portion of the chart (and its x-axis) in the exported PDF.
+      responsive:false,
       plugins:{ legend:{display: !!prevValues, position:'top', align:'end'},
         tooltip:{callbacks:{label: ctx => ctx.dataset.label + ': Rp ' + ctx.parsed.y.toFixed(1) + ' Jt'}} },
       scales:{
