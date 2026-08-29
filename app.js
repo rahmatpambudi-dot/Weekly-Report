@@ -109,8 +109,18 @@ document.querySelectorAll('.s-item').forEach(item => {
     document.querySelectorAll('.s-item').forEach(i=>i.classList.remove('active'));
     item.classList.add('active');
     document.getElementById(item.dataset.scroll).scrollIntoView({behavior:'smooth', block:'start'});
+    closeSidebar(); // no-op on desktop widths; closes the mobile drawer after picking a section
   });
 });
+
+// ===== Mobile sidebar drawer (hamburger toggle) =====
+const sidebarEl = document.getElementById('sidebar');
+const sidebarOverlayEl = document.getElementById('sidebarOverlay');
+function openSidebar(){ sidebarEl.classList.add('open'); sidebarOverlayEl.classList.add('open'); }
+function closeSidebar(){ sidebarEl.classList.remove('open'); sidebarOverlayEl.classList.remove('open'); }
+document.getElementById('hamburgerBtn').addEventListener('click', openSidebar);
+document.getElementById('sidebarClose').addEventListener('click', closeSidebar);
+sidebarOverlayEl.addEventListener('click', closeSidebar);
 
 // ===== Productivity aggregation =====
 function avgProdForRange(months){
