@@ -158,6 +158,8 @@ table.dt{width:100%;border-collapse:collapse;font-size:12px;}
    same Chromium print-resize race (canvas stuck at its pre-print half-width size instead
    of filling the full-width single-column print layout). */
 #doTripTrendChart,#insUjpTrendChart{width:100% !important;height:100% !important;}
+/* Same fix for the "Trend Insentif — NDC" chart — same Chromium print-resize race. */
+#trendChart{width:100% !important;height:100% !important;}
 
 .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700;}
 .badge.green{background:var(--gbg);color:var(--green);}
@@ -432,7 +434,7 @@ body.export-mode .main{margin-left:0;}
         <div class="sec-note" id="trendNote">Total insentif pada periode terpilih</div>
       </div>
       <div class="panel chart-panel">
-        <div class="pb"><div class="chart-wrap"><canvas id="trendChart"></canvas></div></div>
+        <div class="pb"><div class="chart-wrap" style="height:auto;aspect-ratio:960/300;"><canvas id="trendChart" width="960" height="300"></canvas></div></div>
       </div>
     </div>
 
