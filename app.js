@@ -23,9 +23,9 @@ function kpiBadge(key, val, site){
   const cls = pct>=100 ? 'hit' : pct>=90 ? 'warn' : 'miss';
   return `<div class="kpi-badge-sm ${cls}">🎯 Target ${t.fmt(tgt)} (${pct.toFixed(0)}%)</div>`;
 }
-const MONTH_KEYS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08'];
-const MONTH_SHORT = {'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'Mei','06':'Jun','07':'Jul','08':'Agu'};
-const MPP_MONTH_FIELD = {'2026-01':'jan','2026-02':'feb','2026-03':'mar','2026-04':'apr','2026-05':'may','2026-06':'jun','2026-07':'jul','2026-08':'aug'};
+const MONTH_KEYS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09'];
+const MONTH_SHORT = {'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'Mei','06':'Jun','07':'Jul','08':'Agu','09':'Sep'};
+const MPP_MONTH_FIELD = {'2026-01':'jan','2026-02':'feb','2026-03':'mar','2026-04':'apr','2026-05':'may','2026-06':'jun','2026-07':'jul','2026-08':'aug','2026-09':'sep'};
 
 const fmtRp = v => 'Rp ' + Math.round(v).toLocaleString('id-ID');
 const fmtRpJt = v => 'Rp ' + (v/1e6).toFixed(1) + ' Jt';
@@ -404,7 +404,7 @@ function renderTrend(){
       const f = MPP_MONTH_FIELD[m];
       return INS_DATA.reduce((a,r)=>a+(r[f]||0),0)/1e6;
     });
-    labels = months.map(m => MONTH_SHORT[m.slice(5)] + (m==='2026-08' ? '*' : ''));
+    labels = months.map(m => MONTH_SHORT[m.slice(5)] + (m==='2026-09' ? '*' : ''));
     chartLabel = 'Total Insentif NDC (Rp Jt)';
   }
 
