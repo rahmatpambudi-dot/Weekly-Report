@@ -410,7 +410,9 @@ function renderTrend(){
 
   const ctx = document.getElementById('trendChart').getContext('2d');
   document.getElementById('trendNote').textContent = useDaily
-    ? `Total insentif harian NDC (${fromISO} – ${toISOs})`
+    ? (labels.length
+        ? `Total insentif harian NDC (${fromISO} – ${toISOs})`
+        : `Belum ada data Insentif untuk ${fromISO} – ${toISOs} (source Insentif belum update)`)
     : 'Total insentif bulanan pada periode terpilih';
   if(trendChartObj) trendChartObj.destroy();
 
@@ -799,29 +801,52 @@ function dailyAggByDate(dataArr, fromISO, toISOs, fields){
   return byDate;
 }
 
+// Trips per date summed across FLEET_DATA (internal) + EXT_FLEET_DATA (external), all 5
+// jalur. This is the fresher, fuller-coverage source for daily trip volume — unlike
+// DAILY_INS_DATA (Insentif source), which only covers JBBK/CKP/SDA and can lag behind.
+function fleetTripsByDate(fromISO, toISOs){
+  const byDate = {};
+  [...FLEET_DATA, ...EXT_FLEET_DATA].forEach(r => {
+    if(r.date >= fromISO && r.date <= toISOs) byDate[r.date] = (byDate[r.date]||0) + r.trips;
+  });
+  return byDate;
+}
+
 let doTripTrendChartObj = null;
 function renderDoTripTrend(){
   const fromISO = toISO(state.from), toISOs = toISO(state.to);
 
-  const byDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['do','trips']);
-  const dates = Object.keys(byDate).sort();
+  // DO count is only tracked daily by the Insentif source (JBBK/CKP/SDA) — it can lag
+  // behind the Fleet trip data. Trip volume below is sourced from Fleet data instead
+  // (all 5 jalur, updated by the daily automation), so it stays current even when the
+  // Insentif source hasn't caught up yet.
+  const doByDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['do']);
+  const tripByDate = fleetTripsByDate(fromISO, toISOs);
+  const dates = Array.from(new Set([...Object.keys(doByDate), ...Object.keys(tripByDate)])).sort();
   const labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
-  const do26 = dates.map(d => byDate[d].do);
-  const trip26 = dates.map(d => byDate[d].trips);
+  // null (not 0) where a source has no row yet, so Chart.js draws a gap instead of a
+  // misleading drop to zero.
+  const do26 = dates.map(d => doByDate[d] ? doByDate[d].do : null);
+  const trip26 = dates.map(d => (d in tripByDate) ? tripByDate[d] : null);
 
   // MoM comparison: same day-of-month range in the previous calendar month
   // (e.g. 7-15 Aug -> 7-15 Jul), aligned by position (day 1 of range vs day 1 of prior range).
   const [pf, pt] = prevPeriod(state.from, state.to);
-  const prevByDate = dailyAggByDate(DAILY_INS_DATA, toISO(pf), toISO(pt), ['do','trips']);
-  const prevDates = Object.keys(prevByDate).sort();
+  const pfISO = toISO(pf), ptISO = toISO(pt);
+  const prevDoByDate = dailyAggByDate(DAILY_INS_DATA, pfISO, ptISO, ['do']);
+  const prevTripByDate = fleetTripsByDate(pfISO, ptISO);
+  const prevDoDates = Object.keys(prevDoByDate).sort();
+  const prevTripDates = Object.keys(prevTripByDate).sort();
   let doMoM=null, tripMoM=null, momLabel=null;
-  if(prevDates.length){
-    const n = Math.min(dates.length, prevDates.length);
-    doMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].do : null);
-    tripMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].trips : null);
+  if(prevDoDates.length || prevTripDates.length){
+    doMoM = dates.map((_,i) => i<prevDoDates.length ? prevDoByDate[prevDoDates[i]].do : null);
+    tripMoM = dates.map((_,i) => i<prevTripDates.length ? prevTripByDate[prevTripDates[i]] : null);
     momLabel = MONTH_SHORT[pad2(pf.getUTCMonth()+1)];
   }
-  document.getElementById('doTripTrendTag').textContent = momLabel ? `volume harian (2026) — vs ${momLabel}` : 'volume harian (2026)';
+  const doGap = do26.length && do26.some(v => v==null);
+  document.getElementById('doTripTrendTag').textContent =
+    (momLabel ? `volume harian (2026) — vs ${momLabel}` : 'volume harian (2026)') +
+    (doGap ? ' · DO menunggu update source Insentif' : '');
 
   const manyPoints = do26.length > 20;
   const datasets = [
@@ -871,7 +896,9 @@ function renderInsUjpTrend(){
     ujpMoM = dates.map((_,i) => i<n ? prevByDate[prevDates[i]].ujp/1e6 : null);
     momLabel = MONTH_SHORT[pad2(pf.getUTCMonth()+1)];
   }
-  document.getElementById('insUjpTrendTag').textContent = momLabel ? `total harian (2026) — vs ${momLabel}` : 'total harian (2026)';
+  document.getElementById('insUjpTrendTag').textContent = dates.length
+    ? (momLabel ? `total harian (2026) — vs ${momLabel}` : 'total harian (2026)')
+    : 'belum ada data Insentif untuk periode ini (source belum update)';
 
   const manyPoints = ins26.length > 20;
   const datasets = [
