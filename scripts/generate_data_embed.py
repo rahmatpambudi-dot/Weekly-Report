@@ -147,7 +147,7 @@ def main():
     print("Fetching Insentif data...")
     ins_html = fetch(INSENTIF_HTML_URL)
     all_mpp_raw = json.loads(extract_const(ins_html, "ALL_MPP"))
-    ins_month_keys = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug"]
+    ins_month_keys = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep"]
     INS_DATA = []
     for r in all_mpp_raw:
         if r.get("site") not in KEEP_INSENTIF_SITES:
