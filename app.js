@@ -23,9 +23,11 @@ function kpiBadge(key, val, site){
   const cls = pct>=100 ? 'hit' : pct>=90 ? 'warn' : 'miss';
   return `<div class="kpi-badge-sm ${cls}">🎯 Target ${t.fmt(tgt)} (${pct.toFixed(0)}%)</div>`;
 }
-const MONTH_KEYS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09'];
-const MONTH_SHORT = {'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'Mei','06':'Jun','07':'Jul','08':'Agu','09':'Sep'};
-const MPP_MONTH_FIELD = {'2026-01':'jan','2026-02':'feb','2026-03':'mar','2026-04':'apr','2026-05':'may','2026-06':'jun','2026-07':'jul','2026-08':'aug','2026-09':'sep'};
+// All 12 months of 2026 up front, so no manual edit is needed when a new month starts.
+// monthsOverlapping() only returns months that overlap the selected date range.
+const MONTH_KEYS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
+const MONTH_SHORT = {'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'Mei','06':'Jun','07':'Jul','08':'Agu','09':'Sep','10':'Okt','11':'Nov','12':'Des'};
+const MPP_MONTH_FIELD = {'2026-01':'jan','2026-02':'feb','2026-03':'mar','2026-04':'apr','2026-05':'may','2026-06':'jun','2026-07':'jul','2026-08':'aug','2026-09':'sep','2026-10':'oct','2026-11':'nov','2026-12':'dec'};
 
 const fmtRp = v => 'Rp ' + Math.round(v).toLocaleString('id-ID');
 const fmtRpJt = v => 'Rp ' + (v/1e6).toFixed(1) + ' Jt';
@@ -404,7 +406,7 @@ function renderTrend(){
       const f = MPP_MONTH_FIELD[m];
       return INS_DATA.reduce((a,r)=>a+(r[f]||0),0)/1e6;
     });
-    labels = months.map(m => MONTH_SHORT[m.slice(5)] + (m==='2026-09' ? '*' : ''));
+    labels = months.map(m => MONTH_SHORT[m.slice(5)] + (m===dataMax.slice(0,7) ? '*' : ''));
     chartLabel = 'Total Insentif NDC (Rp Jt)';
   }
 
@@ -605,8 +607,10 @@ function renderFleet(){
 let yoyTrendChartObj = null;
 function renderYoyTrend(){
   const d = SUPPORT_LK_DATA.trend;
-  document.getElementById('yoyTrendFooter').textContent =
-    `Total 2025 (1 Jan–9 Agu): ${fmtNum(d.total2025)} trip · Total 2026 (1 Jan–9 Agu): ${fmtNum(d.total2026)} trip`;
+    const yoyTag = document.getElementById('trendYoyTag');
+  if(yoyTag && d.labels.length) yoyTag.textContent = d.labels[0] + '–' + d.labels[d.labels.length-1];
+document.getElementById('yoyTrendFooter').textContent =
+    `Total 2025 (${d.labels[0]}–${d.labels[d.labels.length-1]}): ${fmtNum(d.total2025)} trip · Total 2026 (${d.labels[0]}–${d.labels[d.labels.length-1]}): ${fmtNum(d.total2026)} trip`;
 
   const ctx = document.getElementById('yoyTrendChart').getContext('2d');
   if(yoyTrendChartObj) yoyTrendChartObj.destroy();
