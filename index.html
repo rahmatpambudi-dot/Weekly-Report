@@ -501,7 +501,21 @@ body.export-mode .main{margin-left:0;}
   </div>
 </div>
 
-<script src="data_embed.js"></script>
-<script src="app.js"></script>
+<script>
+// Cache-busting loader: GitHub Pages/browsers cache data_embed.js & app.js, so a daily
+// data refresh in the repo can take a long time to show up. A versioned URL (changes
+// every 10 minutes) forces a fresh fetch shortly after each update. Load order matters:
+// data_embed.js first, then app.js.
+(function(){
+  var v = Math.floor(Date.now() / 600000);
+  function load(src, cb){
+    var s = document.createElement('script');
+    s.src = src + '?v=' + v;
+    s.onload = cb;
+    document.body.appendChild(s);
+  }
+  load('data_embed.js', function(){ load('app.js'); });
+})();
+</script>
 </body>
 </html>
