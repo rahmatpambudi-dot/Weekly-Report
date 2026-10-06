@@ -147,7 +147,7 @@ def main():
     print("Fetching Insentif data...")
     ins_html = fetch(INSENTIF_HTML_URL)
     all_mpp_raw = json.loads(extract_const(ins_html, "ALL_MPP"))
-    ins_month_keys = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep"]
+    ins_month_keys = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
     INS_DATA = []
     for r in all_mpp_raw:
         if r.get("site") not in KEEP_INSENTIF_SITES:
@@ -237,9 +237,13 @@ def main():
     # NOTE: pinned to a fixed date window (AREA_CONTRIB_DATE_FROM..TO) so it matches the SILK
     # dashboard's "Kontribusi Internal per Area" snapshot exactly. SILK computes this section using
     # whatever date filter is active on its page, not a full-year cumulative — so to stay in sync this
-    # is pinned rather than rolling. Update these two dates manually if the SILK comparison window moves.
-    AREA_CONTRIB_DATE_FROM = "2026-08-01"
-    AREA_CONTRIB_DATE_TO = "2026-08-14"
+    # is pinned rather than rolling. The window is now derived automatically (see below).
+    # Automatic window: month-to-date, i.e. the 1st of the latest data month up to the latest
+    # trip date in the data. It rolls forward by itself every day/month, no manual edit needed.
+    # (Assumption: SILK's snapshot is month-to-date. If SILK's filter differs, only these two
+    # lines need to change.)
+    AREA_CONTRIB_DATE_TO = max(r[7] for r in raw)
+    AREA_CONTRIB_DATE_FROM = AREA_CONTRIB_DATE_TO[:7] + "-01"
 
     ALL_FLEET_SITES = ['AHI Jababeka', 'HCI Jababeka', 'HCI Cikupa', 'Corp Sidoarjo',
                         'IND Jababeka', 'Corp Tamora', 'Corp Tallo']
