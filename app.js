@@ -73,6 +73,19 @@ let state = {
 // needing a manual edit here every time the source data is refreshed.
 const dataMin = '2026-01-01';
 const dataMax = [...FLEET_DATA, ...EXT_FLEET_DATA].reduce((max, r) => r.date > max ? r.date : max, FLEET_DATA[0].date);
+
+// Insentif daily data is published per site and the sites don't update at the same time
+// (e.g. JBBK may already have a day that CKP doesn't have yet). Summing across sites on such a
+// day makes DO / Insentif / UJP drop sharply even though nothing changed operationally.
+// So we only trust days up to the last date that ALL sites have reported (the "complete" cutoff).
+const INS_COMPLETE_MAX = (function(){
+  if(typeof DAILY_INS_DATA === 'undefined' || !DAILY_INS_DATA.length) return null;
+  const lastBySite = {};
+  DAILY_INS_DATA.forEach(r => { if(!lastBySite[r.site] || r.date > lastBySite[r.site]) lastBySite[r.site] = r.date; });
+  return Object.values(lastBySite).reduce((a,b) => a < b ? a : b);
+})();
+const DAILY_INS_CLEAN = (typeof DAILY_INS_DATA === 'undefined') ? [] :
+  DAILY_INS_DATA.filter(r => r.date <= INS_COMPLETE_MAX);
 document.getElementById('dateFrom').min = dataMin;
 document.getElementById('dateFrom').max = dataMax;
 document.getElementById('dateTo').min = dataMin;
@@ -373,12 +386,12 @@ let trendChartObj = null;
 function renderTrend(){
   const fromISO = toISO(state.from), toISOs = toISO(state.to);
   const daySpan = Math.round((state.to - state.from) / 86400000) + 1;
-  const useDaily = daySpan <= 31 && typeof DAILY_INS_DATA !== 'undefined';
+  const useDaily = daySpan <= 31 && DAILY_INS_CLEAN.length > 0;
 
   let labels, values, chartLabel, prevValues=null, prevLabel=null;
 
   if(useDaily){
-    const rows = DAILY_INS_DATA.filter(r => r.date >= fromISO && r.date <= toISOs);
+    const rows = DAILY_INS_CLEAN.filter(r => r.date >= fromISO && r.date <= toISOs);
     const byDate = {};
     rows.forEach(r => { byDate[r.date] = (byDate[r.date]||0) + r.ins; });
     const dates = Object.keys(byDate).sort();
@@ -392,7 +405,7 @@ function renderTrend(){
     // Comparison: same day-range, previous calendar month
     const [pf, pt] = prevPeriod(state.from, state.to);
     const pfISO = toISO(pf), ptISO = toISO(pt);
-    const prevRows = DAILY_INS_DATA.filter(r => r.date >= pfISO && r.date <= ptISO);
+    const prevRows = DAILY_INS_CLEAN.filter(r => r.date >= pfISO && r.date <= ptISO);
     const byPrevDate = {};
     prevRows.forEach(r => { byPrevDate[r.date] = (byPrevDate[r.date]||0) + r.ins; });
     const prevDates = Object.keys(byPrevDate).sort();
@@ -824,7 +837,7 @@ function renderDoTripTrend(){
   // behind the Fleet trip data. Trip volume below is sourced from Fleet data instead
   // (all 5 jalur, updated by the daily automation), so it stays current even when the
   // Insentif source hasn't caught up yet.
-  const doByDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['do']);
+  const doByDate = dailyAggByDate(DAILY_INS_CLEAN, fromISO, toISOs, ['do']);
   const tripByDate = fleetTripsByDate(fromISO, toISOs);
   const dates = Array.from(new Set([...Object.keys(doByDate), ...Object.keys(tripByDate)])).sort();
   const labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
@@ -837,7 +850,7 @@ function renderDoTripTrend(){
   // (e.g. 7-15 Aug -> 7-15 Jul), aligned by position (day 1 of range vs day 1 of prior range).
   const [pf, pt] = prevPeriod(state.from, state.to);
   const pfISO = toISO(pf), ptISO = toISO(pt);
-  const prevDoByDate = dailyAggByDate(DAILY_INS_DATA, pfISO, ptISO, ['do']);
+  const prevDoByDate = dailyAggByDate(DAILY_INS_CLEAN, pfISO, ptISO, ['do']);
   const prevTripByDate = fleetTripsByDate(pfISO, ptISO);
   const prevDoDates = Object.keys(prevDoByDate).sort();
   const prevTripDates = Object.keys(prevTripByDate).sort();
@@ -850,7 +863,7 @@ function renderDoTripTrend(){
   const doGap = do26.length && do26.some(v => v==null);
   document.getElementById('doTripTrendTag').textContent =
     (momLabel ? `volume harian (2026) — vs ${momLabel}` : 'volume harian (2026)') +
-    (doGap ? ' · DO menunggu update source Insentif' : '');
+    (doGap ? ' · DO Insentif lengkap s.d. ' + (INS_COMPLETE_MAX||'-').slice(5).split('-').reverse().join('/') : '');
 
   const manyPoints = do26.length > 20;
   const datasets = [
@@ -884,14 +897,14 @@ let insUjpTrendChartObj = null;
 function renderInsUjpTrend(){
   const fromISO = toISO(state.from), toISOs = toISO(state.to);
 
-  const byDate = dailyAggByDate(DAILY_INS_DATA, fromISO, toISOs, ['ins','ujp']);
+  const byDate = dailyAggByDate(DAILY_INS_CLEAN, fromISO, toISOs, ['ins','ujp']);
   const dates = Object.keys(byDate).sort();
   const labels = dates.map(d => { const [y,m,day] = d.split('-'); return parseInt(day)+' '+MONTH_SHORT[m]; });
   const ins26 = dates.map(d => byDate[d].ins/1e6);
   const ujp26 = dates.map(d => byDate[d].ujp/1e6);
 
   const [pf, pt] = prevPeriod(state.from, state.to);
-  const prevByDate = dailyAggByDate(DAILY_INS_DATA, toISO(pf), toISO(pt), ['ins','ujp']);
+  const prevByDate = dailyAggByDate(DAILY_INS_CLEAN, toISO(pf), toISO(pt), ['ins','ujp']);
   const prevDates = Object.keys(prevByDate).sort();
   let insMoM=null, ujpMoM=null, momLabel=null;
   if(prevDates.length){
