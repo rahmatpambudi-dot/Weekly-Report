@@ -2,56 +2,115 @@ name: Auto-update data_embed.js
 
 on:
   schedule:
-    # Every 2 hours (minute 17 on purpose: GitHub delays jobs queued exactly on the hour).
-    # The source dashboards (Insentif / SILK / Productivity) publish at different times of the
-    # day, so a once-a-day run leaves the dashboard up to ~24h behind.
+    # Every 2 hours (minute 17: GitHub delays jobs queued exactly on the hour).
     - cron: '17 */2 * * *'
-  workflow_dispatch: {}  # manual trigger from the Actions tab
+  workflow_dispatch: {}
+  # Also run right after the script or this workflow is edited, so a bad edit shows red immediately.
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/generate_data_embed.py'
+      - '.github/workflows/update-data-embed.yml'
 
 permissions:
   contents: write
 
-# Never run two refreshes at once (e.g. a scheduled run overlapping a manual one).
 concurrency:
   group: update-data-embed
   cancel-in-progress: false
 
+env:
+  # One service account for all three Sheets. Whichever of these secret names exists is used.
+  SA_JSON: ${{ secrets.GSHEET_SERVICE_ACCOUNT || secrets.GDRIVE_CREDENTIALS || secrets.GOOGLE_CREDENTIALS }}
+
 jobs:
   update-data:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Regenerate data_embed.js from source dashboards (3 attempts)
+      - name: Install dependencies
+        run: pip install -q gspread google-auth google-auth-httplib2 google-api-python-client openpyxl
+
+      - name: Get source dashboards' scripts
         run: |
-          for i in 1 2 3; do
-            if python3 scripts/generate_data_embed.py; then
-              exit 0
-            fi
-            echo "Attempt $i failed, retrying in 30s..."
-            sleep 30
-          done
-          echo "::error::generate_data_embed.py failed 3 times in a row (a source dashboard is probably unreachable)"
-          exit 1
+          mkdir -p sources
+          git clone -q --depth 1 https://github.com/rahmatpambudi-dot/Insentif sources/insentif
+          git clone -q --depth 1 https://github.com/heylilyloops/lk-internal-fleet-dashboard sources/silk
+          git clone -q --depth 1 https://github.com/rahmatpambudi-dot/Productivity sources/prod
+
+      # Each source is rebuilt straight from its Google Sheet with that dashboard's OWN script,
+      # so numbers are identical to the source dashboard. If a rebuild fails, the published
+      # version from that repo is used instead, so the dashboard still updates.
+      - name: Insentif - read Google Sheets
+        id: ins
+        continue-on-error: true
+        working-directory: sources/insentif
+        env:
+          GDRIVE_CREDENTIALS: ${{ env.SA_JSON }}
+          SHEET_ID_2026: 1a7iYp7MVbcphm_VnkWvgk6PXBZzxWFnqYv5t1mRqezk
+          SHEET_ID_2025: 1Zx1j2CicgqoQgDoY2PxP8qNLDt9p1CRQOui2MLXN2HQ
+        run: python scripts/extract_data.py
+
+      - name: SILK - read Google Sheets
+        id: silk
+        continue-on-error: true
+        working-directory: sources/silk
+        env:
+          GOOGLE_CREDENTIALS: ${{ env.SA_JSON }}
+        run: python scripts/update_dashboard.py
+
+      - name: Productivity - read Google Sheets
+        id: prod
+        continue-on-error: true
+        working-directory: sources/prod
+        env:
+          GSHEET_SERVICE_ACCOUNT: ${{ env.SA_JSON }}
+        run: python scripts/build_dashboard.py
+
+      - name: Regenerate data_embed.js
+        env:
+          SOURCES_DIR: sources
+        run: python3 scripts/generate_data_embed.py
+
+      - name: Check data_embed.js is valid before committing
+        run: |
+          node -e '
+            const fs = require("fs"), vm = require("vm");
+            const ctx = {}; vm.createContext(ctx);
+            vm.runInContext(fs.readFileSync("data_embed.js","utf8") +
+              ";this.__x={PROD_DATA,INS_DATA,INSIGHT_DATA,DAILY_INS_DATA,FLEET_DATA,EXT_FLEET_DATA,FLEET_COST_DATA,SUPPORT_LK_DATA}", ctx);
+            for (const [k,v] of Object.entries(ctx.__x)) {
+              const n = Array.isArray(v) ? v.length : Object.keys(v||{}).length;
+              if (!n) { console.error("::error::" + k + " is empty"); process.exit(1); }
+            }
+            const maxDate = ctx.__x.FLEET_DATA.reduce((m,r)=>r.date>m?r.date:m,"");
+            console.log("data_embed.js OK, fleet data up to " + maxDate);
+          '
 
       - name: Commit and push if data changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Commit only when data_embed.js actually differs, so most 2-hourly runs are no-ops.
           if git diff --quiet -- data_embed.js; then
             echo "No changes to data_embed.js, skipping commit."
             exit 0
           fi
           git add data_embed.js
           git commit -m "Auto-update data_embed.js ($(date -u +'%Y-%m-%d %H:%M UTC'))"
-          # If someone pushed in the meantime, rebase on top instead of failing the run.
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push
+
+      - name: Flag sources that could not be read from Google Sheets
+        if: steps.ins.outcome == 'failure' || steps.silk.outcome == 'failure' || steps.prod.outcome == 'failure'
+        run: |
+          if [ "${{ steps.ins.outcome }}" = failure ]; then echo "::warning::Insentif: gagal baca Sheets, pakai data dashboard Insentif yang sudah publish"; fi
+          if [ "${{ steps.silk.outcome }}" = failure ]; then echo "::warning::SILK: gagal baca Sheets (cek share Sheet SILK ke service account), pakai data SILK yang sudah publish"; fi
+          if [ "${{ steps.prod.outcome }}" = failure ]; then echo "::warning::Productivity: gagal baca Sheets, pakai data Productivity yang sudah publish"; fi
