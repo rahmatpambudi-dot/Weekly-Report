@@ -62,10 +62,13 @@ function prevPeriod(fromDate, toDate){
 }
 
 // ===== Global state =====
-let state = {
-  from: new Date(Date.UTC(2026,5,1)),   // default: Jun 1 2026
-  to: new Date(Date.UTC(2026,6,31)),    // default: Jul 31 2026
-};
+// Default period = month-to-date of the latest data (1st of latest month .. latest date).
+// Follows data_embed.js automatically, no manual edit needed.
+let state = { from: null, to: null };
+function setDefaultPeriod(){
+  state.to = new Date(dataMax + 'T00:00:00Z');
+  state.from = new Date(Date.UTC(state.to.getUTCFullYear(), state.to.getUTCMonth(), 1));
+}
 
 // ===== Init date pickers =====
 // dataMax is derived from the latest date actually present in FLEET_DATA (daily-granularity
@@ -73,6 +76,7 @@ let state = {
 // needing a manual edit here every time the source data is refreshed.
 const dataMin = '2026-01-01';
 const dataMax = [...FLEET_DATA, ...EXT_FLEET_DATA].reduce((max, r) => r.date > max ? r.date : max, FLEET_DATA[0].date);
+setDefaultPeriod();
 
 // Insentif daily data is published per site and the sites don't update at the same time
 // (e.g. JBBK may already have a day that CKP doesn't have yet). Summing across sites on such a
@@ -103,8 +107,7 @@ document.getElementById('applyBtn').addEventListener('click', () => {
   render();
 });
 document.getElementById('resetBtn').addEventListener('click', () => {
-  state.from = new Date(Date.UTC(2026,5,1));
-  state.to = new Date(Date.UTC(2026,6,31));
+  setDefaultPeriod();
   document.getElementById('dateFrom').value = toISO(state.from);
   document.getElementById('dateTo').value = toISO(state.to);
   render();
