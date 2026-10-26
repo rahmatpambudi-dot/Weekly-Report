@@ -7,8 +7,10 @@ Regenerate data_embed.js from the 3 source dashboards:
 Run with: python3 scripts/generate_data_embed.py
 Writes data_embed.js in the repo root.
 """
+import os
 import re
 import json
+import time
 import urllib.request
 from collections import defaultdict
 
@@ -30,10 +32,36 @@ MONTH_SHORT_ID = {'01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr', '05': 'Mei
 SCOPE_AREAS = ['Jawa Barat', 'Lampung', 'Jawa Timur']
 
 
+# Local copies of the source repos, freshly rebuilt straight from Google Sheets by the
+# workflow (see .github/workflows/update-data-embed.yml). If a local file is missing
+# (e.g. running this script by hand), we fall back to the published file on GitHub.
+SOURCES_DIR = os.environ.get("SOURCES_DIR", "sources")
+LOCAL_MAP = {
+    "rahmatpambudi-dot/Productivity/main/": "prod/",
+    "rahmatpambudi-dot/Insentif/main/": "insentif/",
+    "heylilyloops/lk-internal-fleet-dashboard/main/": "silk/",
+}
+
+
 def fetch(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "data-embed-generator"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return resp.read().decode("utf-8")
+    for repo_path, local_dir in LOCAL_MAP.items():
+        if repo_path in url:
+            local = os.path.join(SOURCES_DIR, local_dir, url.split(repo_path, 1)[1])
+            if os.path.isfile(local):
+                print(f"  [local] {local}")
+                with open(local, encoding="utf-8") as f:
+                    return f.read()
+    last_err = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "data-embed-generator"})
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                print(f"  [github] {url}")
+                return resp.read().decode("utf-8")
+        except Exception as e:
+            last_err = e
+            time.sleep(10 * (attempt + 1))
+    raise last_err
 
 
 def extract_const(content, name):
